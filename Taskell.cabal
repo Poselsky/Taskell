@@ -32,6 +32,14 @@ library
       src
   build-depends:
       base >=4.7 && <5
+    , haskeline
+    , llvm-hs >=12.0.0 && <13.0.0
+    , llvm-hs-pure >=12.0.0 && <13.0.0
+    , mtl
+    , parsec
+    , prettyprinter
+    , split
+    , text
   default-language: Haskell2010
 
 executable Taskell-exe
@@ -44,6 +52,14 @@ executable Taskell-exe
   build-depends:
       Taskell
     , base >=4.7 && <5
+    , haskeline
+    , llvm-hs >=12.0.0 && <13.0.0
+    , llvm-hs-pure >=12.0.0 && <13.0.0
+    , mtl
+    , parsec
+    , prettyprinter
+    , split
+    , text
   default-language: Haskell2010
 
 test-suite Taskell-test
@@ -57,4 +73,12 @@ test-suite Taskell-test
   build-depends:
       Taskell
     , base >=4.7 && <5
+    , haskeline
+    , llvm-hs >=12.0.0 && <13.0.0
+    , llvm-hs-pure >=12.0.0 && <13.0.0
+    , mtl
+    , parsec
+    , prettyprinter
+    , split
+    , text
   default-language: Haskell2010
