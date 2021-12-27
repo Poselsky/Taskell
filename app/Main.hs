@@ -1,7 +1,7 @@
 module Main where
 
-import Parser
-import Syntax
+import Parsing.Parser
+import Parsing.Syntax
 
 import Control.Monad.Trans
 import System.Console.Haskeline

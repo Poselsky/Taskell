@@ -1,4 +1,4 @@
-module Syntax where
+module Parsing.Syntax where
 
 import qualified Data.Text as T
 import Data.Word

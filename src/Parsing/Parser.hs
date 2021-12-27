@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-module Parser where
+module Parsing.Parser where
 
 import Text.Parsec
 import Text.Parsec.String (Parser)
@@ -9,8 +9,8 @@ import qualified Text.Parsec.Expr as Ex
 import qualified Text.Parsec.Token as Tok
 import qualified Data.Int as I
 
-import Lexer
-import Syntax
+import Parsing.Lexer
+import Parsing.Syntax
 import Debug.Trace
 import Data.Functor.Identity
 
