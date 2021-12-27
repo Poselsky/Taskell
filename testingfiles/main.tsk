@@ -1,0 +1,12 @@
+def void main: args argv
+	vec<int> val = gen 10 -> map (10+) 
+
+	def box<vec<int>|int> a = fork val:
+		map (+10)
+		map (-10) -> fork :
+			foldr Max
+			foldr Min
+
+	parallel<box<vec<int>> b = parallel:
+		a(x)
+		
