@@ -25,7 +25,9 @@ source-repository head
 
 library
   exposed-modules:
-      Lib
+      Parsing.Lexer
+      Parsing.Parser
+      Parsing.Syntax
   other-modules:
       Paths_Taskell
   hs-source-dirs:
