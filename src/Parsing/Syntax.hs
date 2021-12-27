@@ -9,20 +9,20 @@ type Arg = Name
 type IInt = I.Int64
 
 -- TODO: Make pretty printer
--- instance Show Expr where
---     show var@(Var t name) = "Var " ++ t ++ " " ++ name  
---     show (Call name args) = "Call " ++ show name ++ " " ++ show args 
---     show (Function t n args body) = "Function " ++ show t ++ " " ++ n ++ " " ++ show args ++ " { " ++ show body ++ " } "
---     show (Extern n na) = "Extern " ++ n ++ " " ++ show na 
---     show (BinaryOp op expr1 expr2) = "( BinaryOp " ++ show op ++ " " ++ show expr1 ++ " " ++ show expr2 ++ " )"
---     show (UnaryOp op expr) = "( UnaryOp " ++ show op ++ " " ++ show expr ++ " )"
---     show rest = show rest
+instance Show Expr where
+    show var@(Var t name) = "Var " ++ t ++ " " ++ name  
+    show (Call name args) = "Call " ++ show name ++ " " ++ show args 
+    show (Function t n args body) = "Function " ++ show t ++ " " ++ n ++ " " ++ show args ++ " { " ++ show body ++ " } "
+    show (Extern n na) = "Extern " ++ n ++ " " ++ show na 
+    show (BinaryOp op expr1 expr2) = "( BinaryOp " ++ show op ++ " " ++ show expr1 ++ " " ++ show expr2 ++ " )"
+    show (UnaryOp op expr) = "( UnaryOp " ++ show op ++ " " ++ show expr ++ " )"
+    show rest = show rest
 
 data Expr
     = Var String Name 
-    | Call Name [Arg] 
-    | Extern Name [Name] 
-    | Function String Name [Arg] Expr 
+    | Call Name [Expr] 
+    | Extern Name [Expr] 
+    | Function String Name [Expr] Expr 
     | BinaryOp Op Expr Expr
     | UnaryOp Op Expr 
     | Float Double
@@ -35,12 +35,40 @@ data Expr
     | UI16 Word16
     | String String
     | Void
-    deriving (Ord, Eq, Show)
+    deriving (Ord, Eq)
 
 
 data Op
-    = Plus
-    | Minus
-    | Times
-    | Divide
-    deriving (Eq, Ord, Show)
+    = Addition 
+    | Subtraction 
+    | Multiplication 
+    | Division
+    | GreaterThan
+    | LessThan
+    | Assign 
+    deriving (Eq, Ord)
+
+
+fromStringToOperator:: String -> Op
+fromStringToOperator "+" = Addition 
+fromStringToOperator "-" = Subtraction
+fromStringToOperator "*" = Multiplication 
+fromStringToOperator "/" = Division 
+fromStringToOperator "=" = Assign
+fromStringToOperator ">" = GreaterThan 
+fromStringToOperator "<" = LessThan 
+fromStringToOperator _   = error "Unknown operator"
+
+
+instance Show Op where
+    show Addition = "+" 
+    show Subtraction = "-"
+    show Multiplication = "*" 
+    show Division = "/" 
+    show GreaterThan = ">" 
+    show LessThan = "<" 
+    show Assign = "=" 
+
+getVarName:: Expr -> String 
+getVarName (Var _ name) = name
+getVarName _ = error "Can't get name from non var types"

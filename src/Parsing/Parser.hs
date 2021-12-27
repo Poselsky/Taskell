@@ -18,10 +18,10 @@ binary :: String -> Op -> Ex.Assoc -> Ex.Operator String () Identity Expr
 binary s f assoc = Ex.Infix (reservedOp s >> return (BinaryOp f)) assoc
 
 table :: [[Ex.Operator String () Identity Expr ]]
-table = [[binary "*" Times Ex.AssocLeft,
-          binary "/" Divide Ex.AssocLeft]
-        ,[binary "+" Plus Ex.AssocLeft,
-          binary "-" Minus Ex.AssocLeft]]
+table = [[binary "*" (fromStringToOperator "*") Ex.AssocLeft,
+          binary "/" (fromStringToOperator "/") Ex.AssocLeft]
+        ,[binary "+" (fromStringToOperator "+") Ex.AssocLeft,
+          binary "-" (fromStringToOperator "-") Ex.AssocLeft]]
 
 int :: Parser Expr
 int = do
@@ -40,30 +40,30 @@ variable :: Parser Expr
 variable = do
   var <- identifier
   -- TODO: Parse types
-  return $ Var var "Void"
+  return $ Var var var 
 
 function :: Parser Expr 
 function = do
   reserved "def"
   name <- identifier
   args <- parens $ many variable
-  let argumentNames = map show args
+  -- TODO:: Maybe use args as a string or Double instead of whole Expr 
+  -- let argumentNames = map getVarName args
   body <- expr
-  return $ Function "Int" name argumentNames body
+  return $ Function "Int" name args body
 
 extern :: Parser Expr
 extern = do
   reserved "extern"
   name <- identifier
   args <- parens $ many variable
-  let argumentNames = map show args
-  return $ Extern name argumentNames
+  return $ Extern name args 
 
 call :: Parser Expr  
 call = do
   name <- identifier
   args <- parens $ commaSep expr
-  return $ Call name (map show args)
+  return $ Call name args
 
 factor :: Parser Expr 
 factor =
