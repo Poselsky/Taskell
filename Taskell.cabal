@@ -25,6 +25,8 @@ source-repository head
 
 library
   exposed-modules:
+      LLVMIR.Codegen
+      LLVMIR.Emit
       Parsing.Lexer
       Parsing.Parser
       Parsing.Syntax
@@ -34,6 +36,7 @@ library
       src
   build-depends:
       base >=4.7 && <5
+    , containers
     , haskeline
     , llvm-hs >=12.0.0 && <13.0.0
     , llvm-hs-pure >=12.0.0 && <13.0.0
@@ -54,6 +57,7 @@ executable Taskell-exe
   build-depends:
       Taskell
     , base >=4.7 && <5
+    , containers
     , haskeline
     , llvm-hs >=12.0.0 && <13.0.0
     , llvm-hs-pure >=12.0.0 && <13.0.0
@@ -75,6 +79,7 @@ test-suite Taskell-test
   build-depends:
       Taskell
     , base >=4.7 && <5
+    , containers
     , haskeline
     , llvm-hs >=12.0.0 && <13.0.0
     , llvm-hs-pure >=12.0.0 && <13.0.0
