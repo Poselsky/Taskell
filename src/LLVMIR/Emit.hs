@@ -83,9 +83,9 @@ cgen (S.BinaryOp op a b) = do
       f ca cb
     Nothing -> error "No such operator"
 cgen (S.Var t var) = getvar var >>= load
-cgen (S.Float n) = return $ cons $ C.Float (F.Double n)
+cgen (S.Float (Just n)) = return $ cons $ C.Float (F.Double n)
 -- TODO: This should be generated from integer and not double
-cgen (S.Int n) = return $ cons $ C.Float (F.Double $ fromInteger n)
+cgen (S.Int (Just n)) = return $ cons $ C.Float (F.Double $ fromInteger n)
 cgen (S.Call fn args) = do
   largs <- mapM cgen args
   call (externf (AST.Name $ fromString fn)) largs

@@ -13,75 +13,147 @@ import Parsing.Lexer
 import Parsing.Syntax
 import Debug.Trace
 import Data.Functor.Identity
+import Control.Monad.State 
 
-binary :: String -> Op -> Ex.Assoc -> Ex.Operator String () Identity Expr 
+-- data FunctionBody =  
+
+binary :: String -> Op -> Ex.Assoc -> Ex.Operator String () Identity Expr
 binary s f assoc = Ex.Infix (reservedOp s >> return (BinaryOp f)) assoc
 
-table :: [[Ex.Operator String () Identity Expr ]]
-table = [[binary "*" (fromStringToOperator "*") Ex.AssocLeft,
+table :: [[Ex.Operator String () Identity Expr]]
+table  = [[binary "*" (fromStringToOperator "*") Ex.AssocLeft,
           binary "/" (fromStringToOperator "/") Ex.AssocLeft]
         ,[binary "+" (fromStringToOperator "+") Ex.AssocLeft,
           binary "-" (fromStringToOperator "-") Ex.AssocLeft]]
 
-int :: Parser Expr
+int :: Parser (ExprS ExprState)
 int = do
   n <- integer
-  return $ Int n
-
-floating :: Parser Expr 
+  return $ intExpr n
+    where
+      intExpr:: Integer -> ExprS ExprState 
+      intExpr n = do
+        let returnInt = Int $ Just n 
+        modify (\s -> s { currentExpr = returnInt })  
+        get 
+  
+floating :: Parser (ExprS ExprState)
 floating = do
   n <- float
-  return $ Float n
+  return $ floatExpr n
+    where
+      floatExpr:: Double -> ExprS ExprState 
+      floatExpr n = do
+        let returnFloat = Float $ Just n 
+        modify (\s -> s { currentExpr = returnFloat })  
+        get 
 
-expr :: Parser Expr 
-expr = Ex.buildExpressionParser table factor
+stringing:: Parser (ExprS ExprState)
+stringing = do
+  n <- stringLiteral
+  return $ stringExpr n 
+  where
+    stringExpr:: String -> ExprS ExprState 
+    stringExpr s = do
+      let returnString = String $ Just s 
+      modify (\s -> s { currentExpr = returnString })  
+      get 
 
-variable :: Parser Expr
-variable = do
-  var <- identifier
-  -- TODO: Parse types
-  return $ Var var var 
+parseVar:: Parser (ExprS ExprState)
+parseVar = do
+  -- int somevar
+  lookAhType <- choice parsecPossibleVarTypes
+  -- reserved lookAhType
+  spaces
+  varName <- identifier
+  return $ varExpr lookAhType varName
+  where
+    (x:xs) = possibleDataTypesInString
+    parsecPossibleVarTypes = map string possibleDataTypesInString 
+    toReserved = map reserved possibleDataTypesInString
+    varExpr:: String -> String -> ExprS ExprState 
+    varExpr t s = do
+      let returnString = Var (fromStringToDataType t) s 
+      modify (\s -> s { currentExpr = returnString })  
+      get 
 
-function :: Parser Expr 
+expr :: Parser (ExprS ExprState)
+expr = do
+  let evaluatedFactor = fmap (\x -> currentExpr $ evalState (runExprS x) emptyExprState) factor
+  -- Building the table for expression parser
+  let exparser  = Ex.buildExpressionParser table evaluatedFactor 
+  x <- exparser
+  return $ expr' x
+    where
+      expr':: Expr -> ExprS ExprState
+      expr' x = do 
+        modify (\s -> s { currentExpr = x})  
+        get 
+
+variable :: Parser (ExprS ExprState)
+variable = parseVar 
+
+function :: Parser (ExprS ExprState)
 function = do
   reserved "def"
   name <- identifier
   args <- parens $ many variable
   -- TODO:: Maybe use args as a string or Double instead of whole Expr 
   -- let argumentNames = map getVarName args
-  body <- expr
-  return $ Function "Int" name args body
+  -- We can start with empty expr
+  let convertedArgs = map (\arg -> currentExpr $ evalState (runExprS arg) emptyExprState) args
+  body <- fmap (\x -> currentExpr $ evalState (runExprS x) emptyExprState) expr
+  return $ functionExpr name convertedArgs body
+    where
+      functionExpr:: String -> [Expr] -> Expr-> ExprS ExprState 
+      functionExpr name args body = do
+        let returningFunction = Function "Int" name args body
+        modify (\s -> s { currentExpr = returningFunction })  
+        get 
 
-extern :: Parser Expr
+extern :: Parser (ExprS ExprState)
 extern = do
   reserved "extern"
   name <- identifier
   args <- parens $ many variable
-  return $ Extern name args 
+  let convertedArgs = map (\arg -> currentExpr $ evalState (runExprS arg) emptyExprState) args
+  return $ externExpr name convertedArgs
+  where 
+    externExpr:: String -> [Expr] -> ExprS ExprState 
+    externExpr name convertedArgs = do
+      let returningExtern = Extern name convertedArgs 
+      modify (\s -> s { currentExpr = returningExtern })  
+      get 
 
-call :: Parser Expr  
+call :: Parser (ExprS ExprState)
 call = do
   name <- identifier
   args <- parens $ commaSep expr
-  return $ Call name args
+  let convertedArgs = map (\arg -> currentExpr $ evalState (runExprS arg) emptyExprState) args
+  return $ callExpr name convertedArgs
+  where
+    callExpr:: String -> [Expr] -> ExprS ExprState 
+    callExpr name args = do
+      let returningCall = Call name args 
+      modify (\s -> s { currentExpr = returningCall })  
+      get 
 
-factor :: Parser Expr 
+factor :: Parser (ExprS ExprState)
 factor =
     do
       try call
       <|> try function
-      <|> try call
       <|> try variable
       <|> try floating
       <|> try int
       <|> parens expr
 
-defn :: Parser Expr 
-defn = 
+defn :: Parser (ExprS ExprState)
+defn =
   try extern
   <|> try function
   <|> expr
-    
+
 contents :: Parser a -> Parser a
 contents p = do
   Tok.whiteSpace lexer
@@ -89,14 +161,21 @@ contents p = do
   eof
   return r
 
-toplevel :: Parser [Expr]
+toplevel :: Parser [ExprS ExprState]
 toplevel = many $ do
     def <- defn
     reservedOp ";"
     return def
 
 parseExpr :: String -> Either ParseError Expr
-parseExpr s = parse (contents expr) "<stdin>" s
+parseExpr s = do
+  parsedExpr <- parse (contents expr) "<stdin>" s
+  let evaluated = currentExpr $ evalState (runExprS parsedExpr) emptyExprState
+  return evaluated
+
 
 parseToplevel :: String -> Either ParseError [Expr]
-parseToplevel s = parse (contents toplevel) "<stdin>" s
+parseToplevel s = do
+  parsedExprs <- parse (contents toplevel) "<stdin>" s
+  let evaluated = fmap (\parsedExpr -> currentExpr $ evalState (runExprS parsedExpr) emptyExprState) parsedExprs
+  return evaluated

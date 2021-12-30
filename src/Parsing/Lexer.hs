@@ -5,12 +5,13 @@ import Text.Parsec.Language (emptyDef)
 
 import qualified Text.Parsec.Token as Tok
 import Text.Parsec.Token (GenLanguageDef(caseSensitive, commentStart, commentEnd))
+import Parsing.Syntax (possibleDataTypesInString)
 
 lexer :: Tok.TokenParser ()
 lexer = Tok.makeTokenParser style
   where
     ops = ["+","*","-",";"]
-    names = ["def","extern"]
+    names = ["def","extern"] 
     style = emptyDef {
                Tok.reservedOpNames = ops
              , Tok.reservedNames = names
@@ -43,3 +44,7 @@ reserved = Tok.reserved lexer
 
 reservedOp :: String -> Parser ()
 reservedOp = Tok.reservedOp lexer
+
+stringLiteral:: Parser String
+stringLiteral = Tok.stringLiteral lexer
+
