@@ -52,7 +52,7 @@ data Expr
 
 
 fromStringToDataType:: String -> Expr 
-fromStringToDataType "int"    = trace "returnin int" $ Int Nothing
+fromStringToDataType "int"    = Int Nothing
 fromStringToDataType "i64"    = I64 Nothing
 fromStringToDataType "i32"    = I32 Nothing
 fromStringToDataType "i16"    = I16 Nothing
@@ -61,6 +61,18 @@ fromStringToDataType "ui32"   = UI32 Nothing
 fromStringToDataType "ui16"   = UI16 Nothing
 fromStringToDataType "string" = String Nothing
 fromStringToDataType input    = error $ "Can't convert to data type: " ++ input
+
+
+dataTypeToString:: Expr -> String 
+dataTypeToString (Int _)    = "int" 
+dataTypeToString (I64 _)    = "i64"   
+dataTypeToString (I32 _)    = "i32"   
+dataTypeToString (I16 _)    = "i16"   
+dataTypeToString (UI64 _)   = "ui64"  
+dataTypeToString (UI32 _)   = "ui32"  
+dataTypeToString (UI16 _)   = "ui16"  
+dataTypeToString (String _) = "string"
+dataTypeToString input      = error $ "Can't convert from data type to string : " ++ show input
 
 possibleDataTypesInString:: [String]
 possibleDataTypesInString = ["int", "i64", "i32", "i16", "ui64", "ui32", "ui16", "string"]
@@ -100,11 +112,14 @@ getVarName:: Expr -> String
 getVarName (Var _ name) = name
 getVarName _ = error "Can't get name from non var types"
 
+getVarType:: Expr -> String 
+getVarType(Var t _) = dataTypeToString t 
+getVarType _ = error "Can't get name from non var types"
 
 data ExprState 
     = ExprState {
         currentExpr :: Expr
-    ,   blockTypes  :: Map.Map String String
+    ,   blockTypes  :: Map.Map String String 
     } deriving Show
 
 newtype ExprS a = ExprS { runExprS :: State ExprState a }

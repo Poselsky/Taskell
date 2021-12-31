@@ -5,9 +5,11 @@ import Text.Parsec.Language (emptyDef)
 
 import qualified Text.Parsec.Token as Tok
 import Text.Parsec.Token (GenLanguageDef(caseSensitive, commentStart, commentEnd))
-import Parsing.Syntax (possibleDataTypesInString)
+import Parsing.Syntax (possibleDataTypesInString, ExprState)
+import Text.Parsec
+import Control.Monad.Identity
 
-lexer :: Tok.TokenParser ()
+lexer :: Tok.TokenParser ExprState 
 lexer = Tok.makeTokenParser style
   where
     ops = ["+","*","-",";"]
@@ -21,30 +23,33 @@ lexer = Tok.makeTokenParser style
              , Tok.commentLine = "#"
             }
 
-integer :: Parser Integer
+
+type CustomParsec a = ParsecT String ExprState Identity a
+
+integer :: CustomParsec Integer
 integer = Tok.integer lexer
 
-float :: Parser Double
+float :: CustomParsec Double
 float = Tok.float lexer
 
-parens :: Parser a -> Parser a
+parens :: CustomParsec a -> CustomParsec a
 parens = Tok.parens lexer
 
-commaSep :: Parser a -> Parser [a]
+commaSep :: CustomParsec a -> CustomParsec [a]
 commaSep = Tok.commaSep lexer
 
-semiSep :: Parser a -> Parser [a]
+semiSep :: CustomParsec a -> CustomParsec [a]
 semiSep = Tok.semiSep lexer
 
-identifier :: Parser String
+identifier :: CustomParsec String
 identifier = Tok.identifier lexer
 
-reserved :: String -> Parser ()
+reserved :: String -> CustomParsec ()
 reserved = Tok.reserved lexer
 
-reservedOp :: String -> Parser ()
+reservedOp :: String -> CustomParsec ()
 reservedOp = Tok.reservedOp lexer
 
-stringLiteral:: Parser String
+stringLiteral:: CustomParsec String
 stringLiteral = Tok.stringLiteral lexer
 

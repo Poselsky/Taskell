@@ -8,137 +8,100 @@ import Text.Parsec.String (Parser)
 import qualified Text.Parsec.Expr as Ex
 import qualified Text.Parsec.Token as Tok
 import qualified Data.Int as I
+import qualified Data.Map as Map
 
 import Parsing.Lexer
 import Parsing.Syntax
 import Debug.Trace
 import Data.Functor.Identity
-import Control.Monad.State 
+import Control.Monad (guard)
 
--- data FunctionBody =  
-
-binary :: String -> Op -> Ex.Assoc -> Ex.Operator String () Identity Expr
+binary :: String -> Op -> Ex.Assoc -> Ex.Operator String ExprState Identity Expr
 binary s f assoc = Ex.Infix (reservedOp s >> return (BinaryOp f)) assoc
 
-table :: [[Ex.Operator String () Identity Expr]]
+table :: [[Ex.Operator String ExprState Identity Expr]]
 table  = [[binary "*" (fromStringToOperator "*") Ex.AssocLeft,
           binary "/" (fromStringToOperator "/") Ex.AssocLeft]
         ,[binary "+" (fromStringToOperator "+") Ex.AssocLeft,
           binary "-" (fromStringToOperator "-") Ex.AssocLeft]]
 
-int :: Parser (ExprS ExprState)
+int :: CustomParsec Expr
 int = do
   n <- integer
-  return $ intExpr n
-    where
-      intExpr:: Integer -> ExprS ExprState 
-      intExpr n = do
-        let returnInt = Int $ Just n 
-        modify (\s -> s { currentExpr = returnInt })  
-        get 
-  
-floating :: Parser (ExprS ExprState)
+  let returnInt = Int $ Just n
+  updateParserState (\s -> s { stateUser = emptyExprState })
+  return $ returnInt
+
+floating :: CustomParsec Expr
 floating = do
   n <- float
-  return $ floatExpr n
-    where
-      floatExpr:: Double -> ExprS ExprState 
-      floatExpr n = do
-        let returnFloat = Float $ Just n 
-        modify (\s -> s { currentExpr = returnFloat })  
-        get 
+  return $ Float $ Just n
 
-stringing:: Parser (ExprS ExprState)
+stringing:: CustomParsec Expr
 stringing = do
   n <- stringLiteral
-  return $ stringExpr n 
-  where
-    stringExpr:: String -> ExprS ExprState 
-    stringExpr s = do
-      let returnString = String $ Just s 
-      modify (\s -> s { currentExpr = returnString })  
-      get 
+  return $ String $ Just n
 
-parseVar:: Parser (ExprS ExprState)
+parseVar:: CustomParsec Expr
 parseVar = do
-  -- int somevar
-  lookAhType <- choice parsecPossibleVarTypes
-  -- reserved lookAhType
+  varType <- choice parsecPossibleVarTypes
   spaces
   varName <- identifier
-  return $ varExpr lookAhType varName
+  typeMap <- blockTypes <$> getState
+  case Map.lookup varName typeMap of
+    Just nameFromMap -> do
+      unexpected $ "Variable " ++ varName ++ " has already type"
+    Nothing -> do
+      return $ Var (fromStringToDataType varType) varName
   where
-    (x:xs) = possibleDataTypesInString
-    parsecPossibleVarTypes = map string possibleDataTypesInString 
-    toReserved = map reserved possibleDataTypesInString
-    varExpr:: String -> String -> ExprS ExprState 
-    varExpr t s = do
-      let returnString = Var (fromStringToDataType t) s 
-      modify (\s -> s { currentExpr = returnString })  
-      get 
+    parsecPossibleVarTypes = map string possibleDataTypesInString
 
-expr :: Parser (ExprS ExprState)
-expr = do
-  let evaluatedFactor = fmap (\x -> currentExpr $ evalState (runExprS x) emptyExprState) factor
-  -- Building the table for expression parser
-  let exparser  = Ex.buildExpressionParser table evaluatedFactor 
-  x <- exparser
-  return $ expr' x
-    where
-      expr':: Expr -> ExprS ExprState
-      expr' x = do 
-        modify (\s -> s { currentExpr = x})  
-        get 
+parseVarWithExistingType:: CustomParsec Expr
+parseVarWithExistingType = do
+  spaces
+  varName <- identifier
+  --if varName is datatype - then fail
+  guard $ varName `notElem` possibleDataTypesInString
+  typeMap <- blockTypes <$> getState
+  case Map.lookup varName typeMap of
+    Just nameFromMap -> do
+      return $ Var (fromStringToDataType nameFromMap) varName
+    Nothing -> do
+      unexpected $ "Non-existing variable " ++ varName ++ " should be assigned with type"
 
-variable :: Parser (ExprS ExprState)
-variable = parseVar 
 
-function :: Parser (ExprS ExprState)
+expr :: CustomParsec Expr 
+expr = Ex.buildExpressionParser table factor
+
+variable:: CustomParsec Expr
+variable = parseVarWithExistingType <|> parseVar
+
+function:: CustomParsec Expr
 function = do
   reserved "def"
   name <- identifier
-  args <- parens $ many variable
-  -- TODO:: Maybe use args as a string or Double instead of whole Expr 
-  -- let argumentNames = map getVarName args
-  -- We can start with empty expr
-  let convertedArgs = map (\arg -> currentExpr $ evalState (runExprS arg) emptyExprState) args
-  body <- fmap (\x -> currentExpr $ evalState (runExprS x) emptyExprState) expr
-  return $ functionExpr name convertedArgs body
-    where
-      functionExpr:: String -> [Expr] -> Expr-> ExprS ExprState 
-      functionExpr name args body = do
-        let returningFunction = Function "Int" name args body
-        modify (\s -> s { currentExpr = returningFunction })  
-        get 
+  args <- parens $ (parseVar `sepBy` (string ",")) 
+  -- TODO:: Maybe use args as a string instead of whole Expr 
+  -- Map is in form:: (varName, varType)
+  updateParserState (\s@State{ stateUser = estate } -> s { stateUser = estate { blockTypes = Map.fromList (map (\a-> (getVarName a, getVarType a)) args) }})
+  body <- expr
+  -- return $ functionExpr bodyState name convertedArgs body
+  return $ Function "int" name args body
 
-extern :: Parser (ExprS ExprState)
+extern :: CustomParsec Expr
 extern = do
   reserved "extern"
   name <- identifier
-  args <- parens $ many variable
-  let convertedArgs = map (\arg -> currentExpr $ evalState (runExprS arg) emptyExprState) args
-  return $ externExpr name convertedArgs
-  where 
-    externExpr:: String -> [Expr] -> ExprS ExprState 
-    externExpr name convertedArgs = do
-      let returningExtern = Extern name convertedArgs 
-      modify (\s -> s { currentExpr = returningExtern })  
-      get 
+  args <- parens $ many parseVar
+  return $ Extern name args
 
-call :: Parser (ExprS ExprState)
+call :: CustomParsec Expr
 call = do
   name <- identifier
   args <- parens $ commaSep expr
-  let convertedArgs = map (\arg -> currentExpr $ evalState (runExprS arg) emptyExprState) args
-  return $ callExpr name convertedArgs
-  where
-    callExpr:: String -> [Expr] -> ExprS ExprState 
-    callExpr name args = do
-      let returningCall = Call name args 
-      modify (\s -> s { currentExpr = returningCall })  
-      get 
+  return $ Call name args
 
-factor :: Parser (ExprS ExprState)
+factor :: CustomParsec Expr
 factor =
     do
       try call
@@ -148,34 +111,34 @@ factor =
       <|> try int
       <|> parens expr
 
-defn :: Parser (ExprS ExprState)
+defn :: CustomParsec Expr
 defn =
   try extern
   <|> try function
   <|> expr
 
-contents :: Parser a -> Parser a
+contents :: CustomParsec a -> CustomParsec a
 contents p = do
   Tok.whiteSpace lexer
   r <- p
   eof
   return r
 
-toplevel :: Parser [ExprS ExprState]
+toplevel :: CustomParsec [Expr]
 toplevel = many $ do
     def <- defn
     reservedOp ";"
     return def
 
-parseExpr :: String -> Either ParseError Expr
-parseExpr s = do
-  parsedExpr <- parse (contents expr) "<stdin>" s
-  let evaluated = currentExpr $ evalState (runExprS parsedExpr) emptyExprState
-  return evaluated
+-- parseExpr :: String -> Either ParseError Expr
+-- parseExpr s = do
+--   parsedExpr <- runParser (contents expr) "<stdin>" s
+--   return parsedExpr
+--   -- let evaluated = currentExpr $ evalState (runExprS parsedExpr) emptyExprState
+--   -- return evaluated
 
 
 parseToplevel :: String -> Either ParseError [Expr]
 parseToplevel s = do
-  parsedExprs <- parse (contents toplevel) "<stdin>" s
-  let evaluated = fmap (\parsedExpr -> currentExpr $ evalState (runExprS parsedExpr) emptyExprState) parsedExprs
-  return evaluated
+  -- parsedExprs <- parse (contents toplevel) "<stdin>" s
+  runParser (contents toplevel) emptyExprState "stdin" s

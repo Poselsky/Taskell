@@ -42,9 +42,15 @@ repl = runInputT defaultSettings (loop initModule)
           Just modn -> loop modn
           Nothing -> loop mod
 
+runBasicCase:: IO ()
+runBasicCase = do
+  a <- process initModule "def add(int a,int b,int c) a + b + c;"
+  print a
+
 main :: IO ()
 main = do
-  args <- getArgs
-  case args of
-    []      -> repl
-    [fname] -> processFile fname >> return ()
+  runBasicCase
+  -- args <- getArgs
+  -- case args of
+  --   []      -> repl
+  --   [fname] -> processFile fname >> return ()
