@@ -80,7 +80,7 @@ function:: CustomParsec Expr
 function = do
   reserved "def"
   name <- identifier
-  args <- parens $ (parseVar `sepBy` (string ",")) 
+  args <- parens $ (parseVar `sepBy` between spaces spaces (string ",")) 
   -- TODO:: Maybe use args as a string instead of whole Expr 
   -- Map is in form:: (varName, varType)
   updateParserState (\s@State{ stateUser = estate } -> s { stateUser = estate { blockTypes = Map.fromList (map (\a-> (getVarName a, getVarType a)) args) }})
