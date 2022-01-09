@@ -78,15 +78,19 @@ variable = parseVarWithExistingType <|> parseVar
 
 function:: CustomParsec Expr
 function = do
-  reserved "def"
   name <- identifier
   args <- parens $ (parseVar `sepBy` between spaces spaces (string ",")) 
   -- TODO:: Maybe use args as a string instead of whole Expr 
   -- Map is in form:: (varName, varType)
   updateParserState (\s@State{ stateUser = estate } -> s { stateUser = estate { blockTypes = Map.fromList (map (\a-> (getVarName a, getVarType a)) args) }})
+  spaces
+  char ':'
+  spaces
+  dataTypeInStr <- choice $ map string possibleDataTypesInString 
+  spaces
   body <- expr
   -- return $ functionExpr bodyState name convertedArgs body
-  return $ Function "int" name args body
+  return $ Function dataTypeInStr name args body
 
 extern :: CustomParsec Expr
 extern = do
