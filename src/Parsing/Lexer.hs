@@ -13,7 +13,7 @@ lexer :: Tok.TokenParser ExprState
 lexer = Tok.makeTokenParser style
   where
     ops = ["+","*","-",";"]
-    names = ["def","extern"] 
+    names = ["def","extern", "ret"] 
     style = emptyDef {
                Tok.reservedOpNames = ops
              , Tok.reservedNames = names
