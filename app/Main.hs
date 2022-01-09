@@ -44,8 +44,8 @@ repl = runInputT defaultSettings (loop initModule)
 
 runBasicCase:: IO ()
 runBasicCase = do
-  a <- process initModule "def add(int a,int b,int c) a + b + c;"
-  print a
+  a <- process initModule "add(int a,int b,int c)  : string a + b + c;"
+  return ()
 
 main :: IO ()
 main = do
