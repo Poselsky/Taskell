@@ -11,10 +11,10 @@ import qualified Data.Int as I
 import qualified Data.Map as Map
 
 import Parsing.Lexer
-import Parsing.Syntax
 import Debug.Trace
 import Data.Functor.Identity
 import Control.Monad (guard)
+import Parsing.Syntax
 
 binary :: String -> Op -> Ex.Assoc -> Ex.Operator String ExprState Identity Expr
 binary s f assoc = Ex.Infix (reservedOp s >> return (BinaryOp f)) assoc
@@ -88,7 +88,7 @@ function = do
   spaces
   dataTypeInStr <- choice $ map string possibleDataTypesInString 
   spaces
-  body <- expr
+  body <- braces expr
   -- return $ functionExpr bodyState name convertedArgs body
   return $ Function dataTypeInStr name args body
 
@@ -105,10 +105,24 @@ call = do
   args <- parens $ commaSep expr
   return $ Call name args
 
+ifexpr :: CustomParsec Expr
+ifexpr = do
+  reserved "if"
+  spaces
+  boolExpr <- between (char '(') (char ')') expr
+  tr <- braces expr
+  -- TODO: ELIF statement here
+  reserved "else"
+  spaces
+  fl <- braces expr
+  return $ If boolExpr tr fl
+
+
 factor :: CustomParsec Expr
 factor =
     do
-      try call
+      try ifexpr 
+      <|> try call
       <|> try function
       <|> try variable
       <|> try floating

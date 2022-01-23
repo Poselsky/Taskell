@@ -20,11 +20,20 @@ import Data.String (fromString)
 import Parsing.Syntax (Op(Assign), getVarName)
 import Data.List.Split (splitOn)
 import Debug.Trace (trace)
+import LLVM.AST (Operand(ConstantOperand))
+import LLVM.IRBuilder.Instruction (phi)
+
+one = cons $ C.Float (F.Double 1.0)
+zero = cons $ C.Float (F.Double 0.0)
+false = zero
+true = one
 
 toSig :: [S.Expr] -> [(AST.Type, AST.Name)]
 toSig = map (\x -> (double, AST.Name $ fromString $ getVarName x))
 
+
 codegenTop :: S.Expr -> LLVM ()
+-- TODO: This is really similar to cgen function def for Function
 codegenTop (S.Function t name args body) = do
   define double name fnargs bls
   where
@@ -84,11 +93,43 @@ cgen (S.BinaryOp op a b) = do
     Nothing -> error "No such operator"
 cgen (S.Var t var) = getvar var >>= load
 cgen (S.Float (Just n)) = return $ cons $ C.Float (F.Double n)
--- TODO: This should be generated from integer and not double
+-- TODO: This should be generated from integer and not double, related to llvm type todo
 cgen (S.Int (Just n)) = return $ cons $ C.Float (F.Double $ fromInteger n)
 cgen (S.Call fn args) = do
   largs <- mapM cgen args
   call (externf (AST.Name $ fromString fn)) largs
+cgen (S.If cond tr fl) = do
+  ifthen <- addBlock "if.then"
+  ifelse <- addBlock "if.else"
+  ifexit <- addBlock "if.exit"
+
+  -- %entry
+  ------------------
+  cond <- cgen cond
+  test <- fcmp FP.ONE false cond
+  cbr test ifthen ifelse -- Branch based on the condition
+
+  -- if.then
+  ------------------
+  setBlock ifthen
+  trval <- cgen tr       -- Generate code for the true branch
+  br ifexit              -- Branch to the merge block
+  ifthen <- getBlock
+
+  -- if.else
+  ------------------
+  setBlock ifelse
+  flval <- cgen fl       -- Generate code for the false branch
+  br ifexit              -- Branch to the merge block
+  ifelse <- getBlock
+
+  -- if.exit
+  ------------------
+  setBlock ifexit
+  -- TODO: Here's potential of chaining if else
+  return $ AST.value $ AST.Phi double [(trval, ifthen), (flval, ifelse)] []
+  
+
 cgen S.Function{} = error "Function not implemented"
 cgen S.Extern{} = error "Extern not implemented"
 cgen expr = error $ "Rest in codegenerator is undefined " ++ show expr

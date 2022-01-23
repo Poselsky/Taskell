@@ -13,7 +13,7 @@ lexer :: Tok.TokenParser ExprState
 lexer = Tok.makeTokenParser style
   where
     ops = ["+","*","-",";"]
-    names = ["def","extern", "ret"] 
+    names = ["def","extern", "ret", "if", "else"] 
     style = emptyDef {
                Tok.reservedOpNames = ops
              , Tok.reservedNames = names
@@ -52,4 +52,7 @@ reservedOp = Tok.reservedOp lexer
 
 stringLiteral:: CustomParsec String
 stringLiteral = Tok.stringLiteral lexer
+
+braces:: CustomParsec a -> CustomParsec a
+braces = Tok.braces lexer
 

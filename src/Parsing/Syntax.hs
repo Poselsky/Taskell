@@ -18,6 +18,7 @@ instance Show Expr where
     show (Call name args) = "Call " ++ show name ++ " " ++ show args 
     show (Function t n args body) = "Function " ++ show t ++ " " ++ n ++ " " ++ show args ++ " { " ++ show body ++ " } "
     show (Extern n na) = "Extern " ++ n ++ " " ++ show na 
+    show (If boolExpr ifTrue ifFalse) = "If( " ++ show boolExpr ++  "){ " ++ show ifTrue ++ " } else " ++ "{ "++ show ifFalse++" }"
     show (BinaryOp op expr1 expr2) = "( BinaryOp " ++ show op ++ " " ++ show expr1 ++ " " ++ show expr2 ++ " )"
     show (UnaryOp op expr) = "( UnaryOp " ++ show op ++ " " ++ show expr ++ " )"
     show (Float a) = "Float " ++ show a
@@ -32,12 +33,15 @@ instance Show Expr where
     show Void = "Void "
 
 data Expr
+    -- Var should refer to Data type and name
     = Var Expr Name 
     | Call Name [Expr] 
     | Extern Name [Expr] 
     | Function String Name [Expr] Expr 
     | BinaryOp Op Expr Expr
     | UnaryOp Op Expr 
+    | If Expr Expr Expr
+    -- Data types
     | Float (Maybe Double)
     | Int (Maybe Integer)
     | I64 (Maybe I.Int64) 
@@ -120,6 +124,7 @@ data ExprState
     = ExprState {
         currentExpr :: Expr
     ,   blockTypes  :: Map.Map String String 
+    ,   parentExpr  :: Expr
     } deriving Show
 
 newtype ExprS a = ExprS { runExprS :: State ExprState a }
@@ -128,5 +133,6 @@ newtype ExprS a = ExprS { runExprS :: State ExprState a }
 emptyExprState:: ExprState
 emptyExprState = ExprState {
     currentExpr = Void,
+    parentExpr  = Void,
     blockTypes  = Map.empty
 }
