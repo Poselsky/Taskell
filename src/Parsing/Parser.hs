@@ -15,21 +15,38 @@ import Debug.Trace
 import Data.Functor.Identity
 import Control.Monad (guard)
 import Parsing.Syntax
+import Parsing.ParserStateHelpers (appendParentTracerState)
+import GHC.Stack
 
 binary :: String -> Op -> Ex.Assoc -> Ex.Operator String ExprState Identity Expr
 binary s f assoc = Ex.Infix (reservedOp s >> return (BinaryOp f)) assoc
 
 table :: [[Ex.Operator String ExprState Identity Expr]]
-table  = [[binary "*" (fromStringToOperator "*") Ex.AssocLeft,
-          binary "/" (fromStringToOperator "/") Ex.AssocLeft]
-        ,[binary "+" (fromStringToOperator "+") Ex.AssocLeft,
-          binary "-" (fromStringToOperator "-") Ex.AssocLeft]]
+table  = [
+          [
+            binary "*" (fromStringToOperator "*") Ex.AssocLeft,
+            binary "/" (fromStringToOperator "/") Ex.AssocLeft
+          ],
+          [
+            binary "+" (fromStringToOperator "+") Ex.AssocLeft,
+            binary "-" (fromStringToOperator "-") Ex.AssocLeft
+          ],
+          [
+            binary "==" (fromStringToOperator "==") Ex.AssocLeft,
+            binary "!=" (fromStringToOperator "!=") Ex.AssocLeft
+          ],
+          [
+            binary ">" (fromStringToOperator ">") Ex.AssocLeft,
+            binary "<" (fromStringToOperator "<") Ex.AssocLeft,
+            binary "<=" (fromStringToOperator "<=") Ex.AssocLeft,
+            binary ">=" (fromStringToOperator ">=") Ex.AssocLeft
+          ]
+        ]
 
 int :: CustomParsec Expr
 int = do
   n <- integer
   let returnInt = Int $ Just n
-  updateParserState (\s -> s { stateUser = emptyExprState })
   return $ returnInt
 
 floating :: CustomParsec Expr
@@ -67,26 +84,30 @@ parseVarWithExistingType = do
     Just nameFromMap -> do
       return $ Var (fromStringToDataType nameFromMap) varName
     Nothing -> do
-      unexpected $ "Non-existing variable " ++ varName ++ " should be assigned with type"
+      unexpected $ "Non-existing variable " ++ "\"" ++ varName ++ "\"" ++ " should be assigned with type"
 
 
-expr :: CustomParsec Expr 
+expr :: CustomParsec Expr
 expr = Ex.buildExpressionParser table factor
 
 variable:: CustomParsec Expr
-variable = parseVarWithExistingType <|> parseVar
+variable = do
+  a <- getState
+  trace (prettyCallStack callStack) spaces
+  parseVarWithExistingType <|> parseVar
 
 function:: CustomParsec Expr
 function = do
   name <- identifier
-  args <- parens $ (parseVar `sepBy` between spaces spaces (string ",")) 
+  args <- parens $ (parseVar `sepBy` between spaces spaces (string ","))
   -- TODO:: Maybe use args as a string instead of whole Expr 
   -- Map is in form:: (varName, varType)
-  updateParserState (\s@State{ stateUser = estate } -> s { stateUser = estate { blockTypes = Map.fromList (map (\a-> (getVarName a, getVarType a)) args) }})
+  updateParserState (\s@State{ stateUser = estate } -> s { stateUser = estate { blockTypes = Map.fromList (map (\a-> (getVarName a, getVarType a)) args)}})
+  updateParserState (appendParentTracerState name)
   spaces
   char ':'
   spaces
-  dataTypeInStr <- choice $ map string possibleDataTypesInString 
+  dataTypeInStr <- choice $ map string possibleDataTypesInString
   spaces
   body <- braces expr
   -- return $ functionExpr bodyState name convertedArgs body
@@ -110,6 +131,7 @@ ifexpr = do
   reserved "if"
   spaces
   boolExpr <- between (char '(') (char ')') expr
+  spaces
   tr <- braces expr
   -- TODO: ELIF statement here
   reserved "else"
@@ -121,7 +143,7 @@ ifexpr = do
 factor :: CustomParsec Expr
 factor =
     do
-      try ifexpr 
+      try ifexpr
       <|> try call
       <|> try function
       <|> try variable

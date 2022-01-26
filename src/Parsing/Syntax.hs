@@ -14,7 +14,7 @@ type IInt = I.Int64
 
 -- TODO: Make pretty printer
 instance Show Expr where
-    show var@(Var t name) = "Var " ++ show t ++ " " ++ name  
+    show var@(Var t name) = "( Var " ++ name ++ " " ++ show t ++ " )"
     show (Call name args) = "Call " ++ show name ++ " " ++ show args 
     show (Function t n args body) = "Function " ++ show t ++ " " ++ n ++ " " ++ show args ++ " { " ++ show body ++ " } "
     show (Extern n na) = "Extern " ++ n ++ " " ++ show na 
@@ -88,6 +88,10 @@ data Op
     | Division
     | GreaterThan
     | LessThan
+    | Equality
+    | GreaterOrEqualThan
+    | LessOrEqualThan
+    | NonEquality
     | Assign 
     deriving (Eq, Ord)
 
@@ -100,6 +104,10 @@ fromStringToOperator "/" = Division
 fromStringToOperator "=" = Assign
 fromStringToOperator ">" = GreaterThan 
 fromStringToOperator "<" = LessThan 
+fromStringToOperator "==" = Assign
+fromStringToOperator ">=" = GreaterThan 
+fromStringToOperator "<=" = LessThan 
+fromStringToOperator "!=" = Assign
 fromStringToOperator _   = error "Unknown operator"
 
 
@@ -111,6 +119,10 @@ instance Show Op where
     show GreaterThan = ">" 
     show LessThan = "<" 
     show Assign = "=" 
+    show Equality = "=="
+    show NonEquality = "!="
+    show GreaterOrEqualThan = ">="
+    show LessOrEqualThan = "<="
 
 getVarName:: Expr -> String 
 getVarName (Var _ name) = name
@@ -122,9 +134,10 @@ getVarType _ = error "Can't get name from non var types"
 
 data ExprState 
     = ExprState {
-        currentExpr :: Expr
-    ,   blockTypes  :: Map.Map String String 
-    ,   parentExpr  :: Expr
+        currentExpr  :: Expr
+    ,   blockTypes   :: Map.Map String String 
+    ,   parentExpr   :: Expr
+    ,   parentTracer :: String
     } deriving Show
 
 newtype ExprS a = ExprS { runExprS :: State ExprState a }
@@ -134,5 +147,6 @@ emptyExprState:: ExprState
 emptyExprState = ExprState {
     currentExpr = Void,
     parentExpr  = Void,
+    parentTracer = "",
     blockTypes  = Map.empty
 }
