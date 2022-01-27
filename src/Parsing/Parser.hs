@@ -15,7 +15,7 @@ import Debug.Trace
 import Data.Functor.Identity
 import Control.Monad (guard)
 import Parsing.Syntax
-import Parsing.ParserStateHelpers (appendParentTracerState)
+import Parsing.ParserStateHelpers (appendParentTracerState, appendVariable)
 import GHC.Stack
 
 binary :: String -> Op -> Ex.Assoc -> Ex.Operator String ExprState Identity Expr
@@ -61,7 +61,11 @@ stringing = do
 
 parseVar:: CustomParsec Expr
 parseVar = do
-  varType <- choice parsecPossibleVarTypes
+  let res = fmap reserved possibleDataTypesInString
+  let reservedDataTypes = foldr (<|>) (head res) (tail res)
+  spaces
+  varType <- lookAhead $ choice parsecPossibleVarTypes
+  reservedDataTypes
   spaces
   varName <- identifier
   typeMap <- blockTypes <$> getState
@@ -69,7 +73,9 @@ parseVar = do
     Just nameFromMap -> do
       unexpected $ "Variable " ++ varName ++ " has already type"
     Nothing -> do
-      return $ Var (fromStringToDataType varType) varName
+      let returningExpr = Var (fromStringToDataType varType) varName
+      updateParserState (appendVariable returningExpr)
+      return $ returningExpr 
   where
     parsecPossibleVarTypes = map string possibleDataTypesInString
 
@@ -92,9 +98,7 @@ expr = Ex.buildExpressionParser table factor
 
 variable:: CustomParsec Expr
 variable = do
-  a <- getState
-  trace (prettyCallStack callStack) spaces
-  parseVarWithExistingType <|> parseVar
+  choice [parseVarWithExistingType, parseVar]
 
 function:: CustomParsec Expr
 function = do
@@ -144,9 +148,9 @@ factor :: CustomParsec Expr
 factor =
     do
       try ifexpr
+      <|> try variable
       <|> try call
       <|> try function
-      <|> try variable
       <|> try floating
       <|> try int
       <|> parens expr

@@ -22,6 +22,8 @@ import Data.List.Split (splitOn)
 import Debug.Trace (trace)
 import LLVM.AST (Operand(ConstantOperand))
 import LLVM.IRBuilder.Instruction (phi)
+import GHC.Stack
+import GHC.IO (unsafePerformIO)
 
 one = cons $ C.Float (F.Double 1.0)
 zero = cons $ C.Float (F.Double 0.0)
@@ -68,37 +70,47 @@ lt a b = do
   test <- fcmp FP.ULT a b
   uitofp double test
 
+gt :: AST.Operand -> AST.Operand -> Codegen AST.Operand
+gt a b = lt b a 
+
 binops = Map.fromList [
       ("+", fadd)
     , ("-", fsub)
     , ("*", fmul)
     , ("/", fdiv)
     , ("<", lt)
+    , (">", gt)
   ]
 
 cgen :: S.Expr -> Codegen AST.Operand
-cgen (S.UnaryOp op a) = do
-  cgen $ S.Call ("unary" ++ show op) [a]
-cgen (S.BinaryOp Assign (S.Var t var) val) = do
+cgen a = 
+  --trace (show $ unsafePerformIO $ appendFile "/mnt/c/Users/omusijenko/Desktop/Taskell/log.txt" $ show a ++ "\n") 
+  trace ( show a ) cgen' a
+
+cgen' :: S.Expr -> Codegen AST.Operand
+cgen' (S.UnaryOp op a) = do
+  cgen' $ S.Call ("unary" ++ show op) [a]
+cgen' (S.BinaryOp Assign (S.Var t var) val) = do
   a <- getvar var
   cval <- cgen val
   store a cval
   return cval
-cgen (S.BinaryOp op a b) = do
+cgen' (S.BinaryOp op a b) = do
   case Map.lookup (show op) binops of
     Just f  -> do
       ca <- cgen a
       cb <- cgen b
       f ca cb
     Nothing -> error "No such operator"
-cgen (S.Var t var) = getvar var >>= load
-cgen (S.Float (Just n)) = return $ cons $ C.Float (F.Double n)
+cgen' (S.Var t var) = getvar var >>= load
+cgen' (S.Float (Just n)) = return $ cons $ C.Float (F.Double n)
 -- TODO: This should be generated from integer and not double, related to llvm type todo
-cgen (S.Int (Just n)) = return $ cons $ C.Float (F.Double $ fromInteger n)
-cgen (S.Call fn args) = do
+cgen' (S.Int (Just n)) = return $ cons $ C.Float (F.Double $ fromInteger n)
+cgen' (S.Int Nothing) = return $ cons $ C.Float (F.Double 0)
+cgen' (S.Call fn args) = do
   largs <- mapM cgen args
   call (externf (AST.Name $ fromString fn)) largs
-cgen (S.If cond tr fl) = do
+cgen' (S.If cond tr fl) = do
   ifthen <- addBlock "if.then"
   ifelse <- addBlock "if.else"
   ifexit <- addBlock "if.exit"
@@ -125,14 +137,13 @@ cgen (S.If cond tr fl) = do
 
   -- if.exit
   ------------------
-  setBlock ifexit
   -- TODO: Here's potential of chaining if else
   return $ AST.value $ AST.Phi double [(trval, ifthen), (flval, ifelse)] []
   
 
-cgen S.Function{} = error "Function not implemented"
-cgen S.Extern{} = error "Extern not implemented"
-cgen expr = error $ "Rest in codegenerator is undefined " ++ show expr
+-- cgen' (S.Function _ _ _ _) = error "Function not implemented"
+-- cgen' (S.Extern _ _) = error "Extern not implemented"
+cgen' expr = error $ "Rest in codegenerator is undefined " ++ show expr
 
 -------------------------------------------------------------------------------
 -- Compilation

@@ -44,7 +44,9 @@ repl = runInputT defaultSettings (loop initModule)
 
 runBasicCase:: IO ()
 runBasicCase = do
-  a <- process initModule "add(int a,int b,int c) : string { if( a < 3) {a + b + c}else{ a + b } };"
+  b <- process initModule "add(int a,int b,int c) : string { a + b + c };"
+  a <- process initModule "int a; if( a < 3) {a }else{ a };"
+
   return ()
 
 main :: IO ()

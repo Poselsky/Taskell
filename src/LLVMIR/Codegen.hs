@@ -254,8 +254,8 @@ fdiv a b = instr $ FDiv noFastMathFlags a b []
 fcmp :: FP.FloatingPointPredicate -> Operand -> Operand -> Codegen Operand
 fcmp cond a b = instr $ FCmp cond a b []
 
-conditionSelect:: Operand -> Operand -> Operand -> Codegen Operand
-conditionSelect cond a b = instr $ Select cond a b []
+-- conditionSelect:: Operand -> Operand -> Operand -> Codegen Operand
+-- conditionSelect cond a b = instr $ Select cond a b []
 
 cons :: C.Constant -> Operand
 cons = ConstantOperand
