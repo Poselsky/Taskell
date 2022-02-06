@@ -27,6 +27,7 @@ library
   exposed-modules:
       LLVMIR.Codegen
       LLVMIR.Emit
+      Parsing.DataTypeParsingHelper
       Parsing.Lexer
       Parsing.Parser
       Parsing.ParserStateHelpers

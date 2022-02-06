@@ -1,4 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ExistentialQuantification #-}
 module Parsing.Syntax where
 
 import qualified Data.Text as T
@@ -32,12 +34,14 @@ instance Show Expr where
     show (String a) = "String " ++ show a 
     show Void = "Void "
 
+type FunctionBody = [Expr]
+
 data Expr
     -- Var should refer to Data type and name
     = Var Expr Name 
     | Call Name [Expr] 
     | Extern Name [Expr] 
-    | Function String Name [Expr] Expr 
+    | Function String Name [Expr] FunctionBody
     | BinaryOp Op Expr Expr
     | UnaryOp Op Expr 
     | If Expr Expr Expr
@@ -54,6 +58,28 @@ data Expr
     | Void
     deriving (Ord, Eq)
 
+
+-------------- Smart constructor
+class ToDataTypeExpression_ a where
+    toDataTypeExpr :: a -> Expr 
+
+instance ToDataTypeExpression_ Double where
+    toDataTypeExpr a = Float $ Just a
+
+instance ToDataTypeExpression_ Integer where
+    toDataTypeExpr a = Int $ Just a
+
+instance (a ~ Char) => ToDataTypeExpression_ [a] where
+    toDataTypeExpr a = String $ Just a
+
+data ToDataTypeExpression = 
+    forall a. ToDataTypeExpression_ a => ToDataTypeExpession a
+
+createToDataExpression:: ToDataTypeExpression_ a => a -> ToDataTypeExpression 
+createToDataExpression a = ToDataTypeExpession (a)
+
+fromDataExpression:: ToDataTypeExpression -> Expr
+fromDataExpression (ToDataTypeExpession a) = toDataTypeExpr a
 
 fromStringToDataType:: String -> Expr 
 fromStringToDataType "int"    = Int Nothing
@@ -101,13 +127,13 @@ fromStringToOperator "+" = Addition
 fromStringToOperator "-" = Subtraction
 fromStringToOperator "*" = Multiplication 
 fromStringToOperator "/" = Division 
-fromStringToOperator "=" = Assign
+fromStringToOperator "=" = Assign 
 fromStringToOperator ">" = GreaterThan 
 fromStringToOperator "<" = LessThan 
-fromStringToOperator "==" = Assign
-fromStringToOperator ">=" = GreaterThan 
-fromStringToOperator "<=" = LessThan 
-fromStringToOperator "!=" = Assign
+fromStringToOperator "==" = Equality
+fromStringToOperator ">=" = GreaterOrEqualThan 
+fromStringToOperator "<=" = LessOrEqualThan 
+fromStringToOperator "!=" = NonEquality 
 fromStringToOperator _   = error "Unknown operator"
 
 
@@ -118,7 +144,7 @@ instance Show Op where
     show Division = "/" 
     show GreaterThan = ">" 
     show LessThan = "<" 
-    show Assign = "=" 
+    show Assign = "="
     show Equality = "=="
     show NonEquality = "!="
     show GreaterOrEqualThan = ">="

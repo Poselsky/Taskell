@@ -24,6 +24,7 @@ import LLVM.AST (Operand(ConstantOperand))
 import LLVM.IRBuilder.Instruction (phi)
 import GHC.Stack
 import GHC.IO (unsafePerformIO)
+import qualified LLVM.AST as Ast
 
 one = cons $ C.Float (F.Double 1.0)
 zero = cons $ C.Float (F.Double 0.0)
@@ -35,19 +36,11 @@ toSig = map (\x -> (double, AST.Name $ fromString $ getVarName x))
 
 
 codegenTop :: S.Expr -> LLVM ()
--- TODO: This is really similar to cgen function def for Function
-codegenTop (S.Function t name args body) = do
+codegenTop f@(S.Function t name args body) = do
   define double name fnargs bls
   where
     fnargs = toSig args
-    bls = createBlocks $ execCodegen $ do
-      entry <- addBlock entryBlockName
-      setBlock entry
-      forM_ args $ \a -> do
-        var <- alloca double
-        store var (local (AST.Name $ fromString $ getVarName a))
-        assign (getVarName a) var
-      cgen body >>= ret
+    bls = createBlocks $ execCodegen $ cgen f >>= ret
 
 codegenTop (S.Extern name args) = do
   external double name fnargs
@@ -73,6 +66,7 @@ lt a b = do
 gt :: AST.Operand -> AST.Operand -> Codegen AST.Operand
 gt a b = lt b a 
 
+binops :: Map.Map [Char] (Operand -> Operand -> Codegen Operand)
 binops = Map.fromList [
       ("+", fadd)
     , ("-", fsub)
@@ -82,18 +76,20 @@ binops = Map.fromList [
     , (">", gt)
   ]
 
+--TODO:This is temporary wrapper for easier tracing
 cgen :: S.Expr -> Codegen AST.Operand
 cgen a = 
   --trace (show $ unsafePerformIO $ appendFile "/mnt/c/Users/omusijenko/Desktop/Taskell/log.txt" $ show a ++ "\n") 
-  trace ( show a ) cgen' a
+  -- trace ( show a ) cgen' a
+  cgen' a
 
 cgen' :: S.Expr -> Codegen AST.Operand
-cgen' (S.UnaryOp op a) = do
-  cgen' $ S.Call ("unary" ++ show op) [a]
-cgen' (S.BinaryOp Assign (S.Var t var) val) = do
-  a <- getvar var
-  cval <- cgen val
-  store a cval
+-- cgen' (S.UnaryOp op a) = do
+--   cgen' $ S.Call ("unary" ++ show op) [a]
+cgen' (S.BinaryOp Assign var@(S.Var t varName) val) = do
+  -- a <- getvar varName 
+  cval <- cgen val 
+  assign varName cval 
   return cval
 cgen' (S.BinaryOp op a b) = do
   case Map.lookup (show op) binops of
@@ -140,8 +136,15 @@ cgen' (S.If cond tr fl) = do
   -- TODO: Here's potential of chaining if else
   return $ AST.value $ AST.Phi double [(trval, ifthen), (flval, ifelse)] []
   
+cgen' (S.Function t name args body) = do 
+  entry <- addBlock entryBlockName
+  setBlock entry
+  forM_ args $ \a -> do
+    var <- alloca double
+    store var (local (AST.Name $ fromString $ getVarName a))
+    assign (getVarName a) var
+  mapM cgen body
 
--- cgen' (S.Function _ _ _ _) = error "Function not implemented"
 -- cgen' (S.Extern _ _) = error "Extern not implemented"
 cgen' expr = error $ "Rest in codegenerator is undefined " ++ show expr
 

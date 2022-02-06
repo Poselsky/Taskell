@@ -13,13 +13,19 @@ import qualified Data.Map as Map
 import Parsing.Lexer
 import Debug.Trace
 import Data.Functor.Identity
-import Control.Monad (guard)
+import Control.Monad (guard, when)
 import Parsing.Syntax
 import Parsing.ParserStateHelpers (appendParentTracerState, appendVariable)
 import GHC.Stack
+import Data.Maybe (isJust)
+import Data.Dynamic (Dynamic(Dynamic), toDyn)
+import Parsing.DataTypeParsingHelper (possibleValueParser)
 
 binary :: String -> Op -> Ex.Assoc -> Ex.Operator String ExprState Identity Expr
 binary s f assoc = Ex.Infix (reservedOp s >> return (BinaryOp f)) assoc
+
+unary :: String -> Op -> Ex.Operator String ExprState Identity Expr
+unary s f = Ex.Prefix (reservedOp s >> return (UnaryOp f))
 
 table :: [[Ex.Operator String ExprState Identity Expr]]
 table  = [
@@ -40,6 +46,9 @@ table  = [
             binary "<" (fromStringToOperator "<") Ex.AssocLeft,
             binary "<=" (fromStringToOperator "<=") Ex.AssocLeft,
             binary ">=" (fromStringToOperator ">=") Ex.AssocLeft
+          ],
+          [
+            binary "=" (fromStringToOperator "=") Ex.AssocLeft
           ]
         ]
 
@@ -69,13 +78,14 @@ parseVar = do
   spaces
   varName <- identifier
   typeMap <- blockTypes <$> getState
+  -- Return bare variable
   case Map.lookup varName typeMap of
     Just nameFromMap -> do
       unexpected $ "Variable " ++ varName ++ " has already type"
     Nothing -> do
       let returningExpr = Var (fromStringToDataType varType) varName
       updateParserState (appendVariable returningExpr)
-      return $ returningExpr 
+      return returningExpr
   where
     parsecPossibleVarTypes = map string possibleDataTypesInString
 
@@ -92,28 +102,46 @@ parseVarWithExistingType = do
     Nothing -> do
       unexpected $ "Non-existing variable " ++ "\"" ++ varName ++ "\"" ++ " should be assigned with type"
 
+parseUnaryAssign:: Expr -> CustomParsec Expr
+parseUnaryAssign var@(Var t name) = do
+  spaces
+  reservedOp "="
+  spaces
+  --TODO: Cleanup with Compose
+  val <- choice $ (fmap.fmap) fromDataExpression possibleValueParser
+
+  --TODO: Guard types
+  return (BinaryOp Assign var val)
+
+parseUnaryAssign nonVar = trace "Can't assign value to non variable types " $ error $ show nonVar
+
+parseVarWithUnaryAssign:: CustomParsec Expr
+parseVarWithUnaryAssign = do
+  a <- parseVar
+  parseUnaryAssign a
 
 expr :: CustomParsec Expr
 expr = Ex.buildExpressionParser table factor
 
 variable:: CustomParsec Expr
 variable = do
-  choice [parseVarWithExistingType, parseVar]
+  ret <- choice [parseVarWithExistingType, parseVarWithUnaryAssign, parseVar] 
+  reservedOp ";"
+  return ret
 
 function:: CustomParsec Expr
 function = do
   name <- identifier
-  args <- parens $ (parseVar `sepBy` between spaces spaces (string ","))
+  args <- choice [parens $ (parseVar `sepBy` between spaces spaces (string ",")), parens $ (return Void `sepBy` spaces)] 
   -- TODO:: Maybe use args as a string instead of whole Expr 
   -- Map is in form:: (varName, varType)
   updateParserState (\s@State{ stateUser = estate } -> s { stateUser = estate { blockTypes = Map.fromList (map (\a-> (getVarName a, getVarType a)) args)}})
   updateParserState (appendParentTracerState name)
+  spaces `sepBy1` reservedOp ":"
+  dataTypeInStr' <- choice $ map string possibleDataTypesInString
+  let dataTypeInStr = trace (show dataTypeInStr') dataTypeInStr'
   spaces
-  char ':'
-  spaces
-  dataTypeInStr <- choice $ map string possibleDataTypesInString
-  spaces
-  body <- braces expr
+  body <- braces $ many expr
   -- return $ functionExpr bodyState name convertedArgs body
   return $ Function dataTypeInStr name args body
 
@@ -128,6 +156,7 @@ call :: CustomParsec Expr
 call = do
   name <- identifier
   args <- parens $ commaSep expr
+  reservedOp ";"
   return $ Call name args
 
 ifexpr :: CustomParsec Expr
@@ -145,21 +174,19 @@ ifexpr = do
 
 
 factor :: CustomParsec Expr
-factor =
-    do
-      try ifexpr
+factor = do
+    try ifexpr
       <|> try variable
-      <|> try call
-      <|> try function
+      <|> try (function <|> call)
       <|> try floating
       <|> try int
       <|> parens expr
 
 defn :: CustomParsec Expr
-defn =
+defn = do
   try extern
-  <|> try function
-  <|> expr
+    <|> try function
+    <|> expr
 
 contents :: CustomParsec a -> CustomParsec a
 contents p = do
@@ -171,7 +198,6 @@ contents p = do
 toplevel :: CustomParsec [Expr]
 toplevel = many $ do
     def <- defn
-    reservedOp ";"
     return def
 
 -- parseExpr :: String -> Either ParseError Expr

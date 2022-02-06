@@ -9,10 +9,11 @@ import Parsing.Syntax (possibleDataTypesInString, ExprState)
 import Text.Parsec
 import Control.Monad.Identity
 
+
 lexer :: Tok.TokenParser ExprState 
 lexer = Tok.makeTokenParser style
   where
-    ops = ["+","*","-",";", "<", ">", "==", "!=", ">=", "<="]
+    ops = ["+","*","-",";", ":", "<", ">", "==", "!=", ">=", "<=", "="]
     names = ["def","extern", "ret", "if", "else"]  ++ possibleDataTypesInString 
     style = emptyDef {
                Tok.reservedOpNames = ops
