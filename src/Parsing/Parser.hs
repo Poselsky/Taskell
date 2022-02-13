@@ -86,6 +86,19 @@ parseVar = do
   where
     parsecPossibleVarTypes = map string possibleDataTypesInString
 
+--This is to avoid recursive calls
+parseBasicVar:: CustomParsec Expr
+parseBasicVar = do 
+  a <- parseVar
+  reservedOp ";"
+  return a
+
+parseBasicVarWithExistingType:: CustomParsec Expr
+parseBasicVarWithExistingType = do
+  a <- parseVarWithExistingType
+  reservedOp ";"
+  return a
+
 parseVarWithExistingType:: HasCallStack => CustomParsec Expr
 parseVarWithExistingType = do
   varName <- identifier >< "parsing varname"
@@ -106,7 +119,8 @@ parseAssign var@(Var t name) = do
   -- All possible values after assignment
   val <- choice $ fromDataExpressionToExpr possibleAssignParser
   --TODO: Guard types
-  return $ BinaryOp Assign var val
+  let a = BinaryOp Assign var val
+  return a
   where
     assignExpr = Ex.buildExpressionParser table $ choice $ fromDataExpressionToExpr possibleAssignParser ++ [try call, try variable]
 
@@ -114,25 +128,30 @@ parseAssign nonVar = trace "Can't assign value to non variable types " $ error $
 
 parseVarWithAssign:: HasCallStack => CustomParsec Expr
 parseVarWithAssign = do
-  a <- parseVar
-  parseAssign a
+  a <- parseVar >>= parseAssign
+  reservedOp ";"
+  return a
 
 parseExistingVarWithAssign:: HasCallStack => CustomParsec Expr
 parseExistingVarWithAssign = do 
-  a <- parseVarWithExistingType >>= return . trace "parsing var with existing type"
-  parseAssign a >>= return . trace "parsing assign in parse existing var with assign"
+  a <- (parseVarWithExistingType >>= parseAssign) >< "parsing var with existing type"
+  reservedOp ";"
+  return a
 
+--TODO: case where var; = 0 -> shouldn't be acceptable
 variable:: HasCallStack => CustomParsec Expr
 variable = do
-  spaces
-  ret <- try (
-    try parseVarWithExistingType  >< "parse var with existing type"
-    <|> try parseExistingVarWithAssign >< "parse existing var with assign"
-    <|> try parseVarWithAssign >< "parse var with assign"
-    <|> parseVar >< "parse var")
-
-  try $ reservedOp ";"
-  return ret
+  a <- variable' 
+  return a
+  where 
+    variable' = do
+      spaces
+      try ( 
+        try parseExistingVarWithAssign >< "parse existing var with assign"
+        <|> try parseVarWithAssign >< "parse var with assign"
+        <|> try parseBasicVarWithExistingType >< "parse var with existing type"
+        <|> parseBasicVar >< "parse var"
+        )
 
 expr :: CustomParsec Expr
 expr = Ex.buildExpressionParser (table ++ [return $ binary "=" (fromStringToOperator "=") Ex.AssocLeft]) factor

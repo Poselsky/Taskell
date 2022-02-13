@@ -7,7 +7,8 @@ import System.Environment (getArgs)
 main:: IO () 
 main = do 
     print <$> getArgs
-    _ <- runTestTT tests
+    _ <- runTestTT $ "ParseTopLevelTests," ~: parseTopLevelTests 
+    _ <- runTestTT $ "parsing test improvements," ~: testImprovements 
     return ()
     
 
@@ -26,15 +27,27 @@ parseTopLevel_testVarExpr = "" ~: do
         let a = parseToplevel "int a;"
         assertEqual "Parse varWithAssign" "Right [( Var a Int Nothing )]" (show a)
 
-parseTopLevel_testVarExprAssignLater:: Test
-parseTopLevel_testVarExprAssignLater = "" ~: do
+parseTopLevel_testVarExprAssignLater_shouldFail:: Test
+parseTopLevel_testVarExprAssignLater_shouldFail = "Test with semicolon between var and assignment" ~: do
         let a = parseToplevel "int a; a; = 0"
-        assertEqual "Parse varWithAssign" "Right [( Var a Int Nothing ),( BinaryOp = ( Var a Int Nothing ) Int Just 0 )]" (show a)
+        case a of
+          Left pe -> assertBool "This case should pass" True
+          Right exs -> assertFailure $ "Semicolon between variable and assign sign is not permited: " ++ show exs
 
-tests = TestList 
+parseTopLevel_testVarExprAssignLater_Improvement:: Test
+parseTopLevel_testVarExprAssignLater_Improvement = "" ~: do
+        let a = parseToplevel "int a; a = 0;"
+        assertEqual "Parse varWithAssign improvement: " "Right [( Var a Int Nothing ),( BinaryOp = ( Var a Int Nothing ) Int Just 0 )]" (show a)
+
+parseTopLevelTests= TestList 
     [
       parseTopLevel_testAssignIfExpr
     , parseTopLevel_testVarAssignExpr
     , parseTopLevel_testVarExpr
-    , parseTopLevel_testVarExprAssignLater
+    , parseTopLevel_testVarExprAssignLater_shouldFail
+    ]
+
+testImprovements = TestList 
+    [
+        parseTopLevel_testVarExprAssignLater_Improvement
     ]
