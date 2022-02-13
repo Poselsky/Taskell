@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module LLVMIR.Emit where
 
 import LLVM.Module
@@ -34,7 +35,7 @@ true = one
 toSig :: [S.Expr] -> [(AST.Type, AST.Name)]
 toSig = map (\x -> (double, AST.Name $ fromString $ getVarName x))
 
-
+--Todo : I might need to generate another functions here
 codegenTop :: S.Expr -> LLVM ()
 codegenTop f@(S.Function t name args body) = do
   define double name fnargs bls
@@ -76,6 +77,9 @@ binops = Map.fromList [
     , (">", gt)
   ]
 
+cgenB:: S.Expr -> Ast.BasicBlock
+cgenB e = error "not implemented" 
+
 --TODO:This is temporary wrapper for easier tracing
 cgen :: S.Expr -> Codegen AST.Operand
 cgen a = 
@@ -83,14 +87,15 @@ cgen a =
   -- trace ( show a ) cgen' a
   cgen' a
 
-cgen' :: S.Expr -> Codegen AST.Operand
+cgen' :: S.Expr -> Codegen AST.Operand 
 -- cgen' (S.UnaryOp op a) = do
 --   cgen' $ S.Call ("unary" ++ show op) [a]
 cgen' (S.BinaryOp Assign var@(S.Var t varName) val) = do
-  -- a <- getvar varName 
   cval <- cgen val 
   assign varName cval 
-  return cval
+  -- Need to return operand
+  cgen' S.Void 
+
 cgen' (S.BinaryOp op a b) = do
   case Map.lookup (show op) binops of
     Just f  -> do
@@ -143,7 +148,13 @@ cgen' (S.Function t name args body) = do
     var <- alloca double
     store var (local (AST.Name $ fromString $ getVarName a))
     assign (getVarName a) var
-  mapM cgen body
+  --TODO: cgen full body
+  something <- sequence $ cgen <$> body
+  let v = trace (show something) something
+  -- cgen $ head v 
+  return $ head v
+
+cgen' S.Void = return $ ConstantOperand $ C.Null Ast.VoidType
 
 -- cgen' (S.Extern _ _) = error "Extern not implemented"
 cgen' expr = error $ "Rest in codegenerator is undefined " ++ show expr

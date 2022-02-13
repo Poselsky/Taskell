@@ -90,6 +90,7 @@ fromStringToDataType "ui64"   = UI64 Nothing
 fromStringToDataType "ui32"   = UI32 Nothing
 fromStringToDataType "ui16"   = UI16 Nothing
 fromStringToDataType "string" = String Nothing
+fromStringToDataType "float"  = Float Nothing
 fromStringToDataType input    = error $ "Can't convert to data type: " ++ input
 
 
@@ -102,10 +103,11 @@ dataTypeToString (UI64 _)   = "ui64"
 dataTypeToString (UI32 _)   = "ui32"  
 dataTypeToString (UI16 _)   = "ui16"  
 dataTypeToString (String _) = "string"
+dataTypeToString (Float _)  = "float"
 dataTypeToString input      = error $ "Can't convert from data type to string : " ++ show input
 
 possibleDataTypesInString:: [String]
-possibleDataTypesInString = ["int", "i64", "i32", "i16", "ui64", "ui32", "ui16", "string"]
+possibleDataTypesInString = ["int", "float", "i64", "i32", "i16", "ui64", "ui32", "ui16", "string"]
 
 data Op
     = Addition 

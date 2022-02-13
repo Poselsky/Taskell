@@ -135,6 +135,9 @@ emptyCodegen = CodegenState (Name $ fromString entryBlockName) Map.empty [] 1 0 
 execCodegen :: Codegen a -> CodegenState
 execCodegen m = execState (runCodegen m) emptyCodegen
 
+execCodegenWithState :: Codegen a -> CodegenState -> CodegenState 
+execCodegenWithState m = execState (runCodegen m)
+
 fresh :: Codegen Word
 fresh = do
   i <- gets count

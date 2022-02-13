@@ -19,7 +19,8 @@ import Parsing.ParserStateHelpers (appendParentTracerState, appendVariable)
 import GHC.Stack
 import Data.Maybe (isJust)
 import Data.Dynamic (Dynamic(Dynamic), toDyn)
-import Parsing.DataTypeParsingHelper (possibleValueParser)
+import Parsing.DataTypeParsingHelper (possibleAssignParser, fromDataExpressionToExpr)
+import Parsing.ParsingHelpers ((><))
 
 binary :: String -> Op -> Ex.Assoc -> Ex.Operator String ExprState Identity Expr
 binary s f assoc = Ex.Infix (reservedOp s >> return (BinaryOp f)) assoc
@@ -46,9 +47,6 @@ table  = [
             binary "<" (fromStringToOperator "<") Ex.AssocLeft,
             binary "<=" (fromStringToOperator "<=") Ex.AssocLeft,
             binary ">=" (fromStringToOperator ">=") Ex.AssocLeft
-          ],
-          [
-            binary "=" (fromStringToOperator "=") Ex.AssocLeft
           ]
         ]
 
@@ -68,11 +66,10 @@ stringing = do
   n <- stringLiteral
   return $ String $ Just n
 
-parseVar:: CustomParsec Expr
+parseVar:: HasCallStack => CustomParsec Expr
 parseVar = do
   let res = fmap reserved possibleDataTypesInString
   let reservedDataTypes = foldr (<|>) (head res) (tail res)
-  spaces
   varType <- lookAhead $ choice parsecPossibleVarTypes
   reservedDataTypes
   spaces
@@ -89,12 +86,11 @@ parseVar = do
   where
     parsecPossibleVarTypes = map string possibleDataTypesInString
 
-parseVarWithExistingType:: CustomParsec Expr
+parseVarWithExistingType:: HasCallStack => CustomParsec Expr
 parseVarWithExistingType = do
-  spaces
-  varName <- identifier
+  varName <- identifier >< "parsing varname"
   --if varName is datatype - then fail
-  guard $ varName `notElem` possibleDataTypesInString
+  (guard $ varName `notElem` possibleDataTypesInString) >< "Not passing guard"
   typeMap <- blockTypes <$> getState
   case Map.lookup varName typeMap of
     Just nameFromMap -> do
@@ -102,32 +98,44 @@ parseVarWithExistingType = do
     Nothing -> do
       unexpected $ "Non-existing variable " ++ "\"" ++ varName ++ "\"" ++ " should be assigned with type"
 
-parseUnaryAssign:: Expr -> CustomParsec Expr
-parseUnaryAssign var@(Var t name) = do
-  spaces
-  reservedOp "="
-  spaces
-  --TODO: Cleanup with Compose
-  val <- choice $ (fmap.fmap) fromDataExpression possibleValueParser
-
+parseAssign:: HasCallStack => Expr -> CustomParsec Expr
+parseAssign var@(Var t name) = do
+  spaces >< "parsing spaces"
+  reservedOp "=" >< "parsing =" 
+  spaces  
+  -- All possible values after assignment
+  val <- choice $ fromDataExpressionToExpr possibleAssignParser
   --TODO: Guard types
-  return (BinaryOp Assign var val)
+  return $ BinaryOp Assign var val
+  where
+    assignExpr = Ex.buildExpressionParser table $ choice $ fromDataExpressionToExpr possibleAssignParser ++ [try call, try variable]
 
-parseUnaryAssign nonVar = trace "Can't assign value to non variable types " $ error $ show nonVar
+parseAssign nonVar = trace "Can't assign value to non variable types " $ error $ show nonVar
 
-parseVarWithUnaryAssign:: CustomParsec Expr
-parseVarWithUnaryAssign = do
+parseVarWithAssign:: HasCallStack => CustomParsec Expr
+parseVarWithAssign = do
   a <- parseVar
-  parseUnaryAssign a
+  parseAssign a
+
+parseExistingVarWithAssign:: HasCallStack => CustomParsec Expr
+parseExistingVarWithAssign = do 
+  a <- parseVarWithExistingType >>= return . trace "parsing var with existing type"
+  parseAssign a >>= return . trace "parsing assign in parse existing var with assign"
+
+variable:: HasCallStack => CustomParsec Expr
+variable = do
+  spaces
+  ret <- try (
+    try parseVarWithExistingType  >< "parse var with existing type"
+    <|> try parseExistingVarWithAssign >< "parse existing var with assign"
+    <|> try parseVarWithAssign >< "parse var with assign"
+    <|> parseVar >< "parse var")
+
+  try $ reservedOp ";"
+  return ret
 
 expr :: CustomParsec Expr
-expr = Ex.buildExpressionParser table factor
-
-variable:: CustomParsec Expr
-variable = do
-  ret <- choice [parseVarWithExistingType, parseVarWithUnaryAssign, parseVar] 
-  reservedOp ";"
-  return ret
+expr = Ex.buildExpressionParser (table ++ [return $ binary "=" (fromStringToOperator "=") Ex.AssocLeft]) factor
 
 function:: CustomParsec Expr
 function = do
@@ -138,8 +146,7 @@ function = do
   updateParserState (\s@State{ stateUser = estate } -> s { stateUser = estate { blockTypes = Map.fromList (map (\a-> (getVarName a, getVarType a)) args)}})
   updateParserState (appendParentTracerState name)
   spaces `sepBy1` reservedOp ":"
-  dataTypeInStr' <- choice $ map string possibleDataTypesInString
-  let dataTypeInStr = trace (show dataTypeInStr') dataTypeInStr'
+  dataTypeInStr <- choice $ map string possibleDataTypesInString
   spaces
   body <- braces $ many expr
   -- return $ functionExpr bodyState name convertedArgs body
@@ -177,15 +184,14 @@ factor :: CustomParsec Expr
 factor = do
     try ifexpr
       <|> try variable
-      <|> try (function <|> call)
-      <|> try floating
-      <|> try int
+      <|> try (try function <|> call)
+      <|> try (try floating <|> int)
       <|> parens expr
 
 defn :: CustomParsec Expr
 defn = do
   try extern
-    <|> try function
+   <|> try function
     <|> expr
 
 contents :: CustomParsec a -> CustomParsec a
