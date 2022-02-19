@@ -31,6 +31,7 @@ parseTopLevel_testVarExprAssignLater_shouldFail:: Test
 parseTopLevel_testVarExprAssignLater_shouldFail = "Test with semicolon between var and assignment" ~: do
         let a = parseToplevel "int a; a; = 0"
         case a of
+          -- We expect this method to fail
           Left pe -> assertBool "This case should pass" True
           Right exs -> assertFailure $ "Semicolon between variable and assign sign is not permited: " ++ show exs
 
@@ -39,12 +40,27 @@ parseTopLevel_testVarExprAssignLater_Improvement = "" ~: do
         let a = parseToplevel "int a; a = 0;"
         assertEqual "Parse varWithAssign improvement: " "Right [( Var a Int Nothing ),( BinaryOp = ( Var a Int Nothing ) Int Just 0 )]" (show a)
 
+parseTopLevel_longFunctionArgs:: Test
+parseTopLevel_longFunctionArgs = "" ~: do
+        let a = parseToplevel "fun(int a, int b, int c, int d) : int { }"
+        assertEqual "Parse with many func args: " "Right [Function \"int\" fun [( Var a Int Nothing ),( Var b Int Nothing ),( Var c Int Nothing ),( Var d Int Nothing )] { [] } ]" $ show a 
+
+parseTopLevel_sumFunction:: Test
+parseTopLevel_sumFunction = "" ~: do
+        let a = parseToplevel "fun(int a, int b) : int { int c; = a; + b; }"
+        case a of
+          Left pe -> do 
+              assertFailure $ show pe 
+          Right exs -> assertEqual "" "" $ show exs 
+
 parseTopLevelTests= TestList 
     [
       parseTopLevel_testAssignIfExpr
     , parseTopLevel_testVarAssignExpr
     , parseTopLevel_testVarExpr
     , parseTopLevel_testVarExprAssignLater_shouldFail
+    , parseTopLevel_longFunctionArgs
+    , parseTopLevel_sumFunction
     ]
 
 testImprovements = TestList 

@@ -66,6 +66,20 @@ stringing = do
   n <- stringLiteral
   return $ String $ Just n
 
+--TODO: Completely refactor parseVar
+{-
+  1.Var declaration
+  2.Var assignment
+    a. assign previously existing vars
+    b. function calls
+    c. functions (do it with pointers? Need to research this)
+  3.Var type parsing
+  4.Type checking
+  5.After assign operator -
+    a. parse correctly binary operators so it will chain
+    b. last statement should end with ';'
+-}
+
 parseVar:: HasCallStack => CustomParsec Expr
 parseVar = do
   let res = fmap reserved possibleDataTypesInString
@@ -117,7 +131,7 @@ parseAssign var@(Var t name) = do
   reservedOp "=" >< "parsing =" 
   spaces  
   -- All possible values after assignment
-  val <- choice $ fromDataExpressionToExpr possibleAssignParser
+  val <- try assignExpr
   --TODO: Guard types
   let a = BinaryOp Assign var val
   return a
