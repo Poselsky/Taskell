@@ -12,3 +12,6 @@ appendParentTracerState appendingString s@State{ stateUser = estate@ExprState{ p
 appendVariable:: Expr -> State String ExprState -> State String ExprState 
 appendVariable expression s@State{ stateUser = estate@ExprState{ blockTypes = ts }} = 
     s { stateUser = estate { blockTypes = Map.insert (getVarName expression) (getVarType expression) ts }} 
+
+getVariableTypeByName:: String -> ExprState -> Maybe String 
+getVariableTypeByName varName ExprState{ blockTypes = ts } = Map.lookup varName ts 

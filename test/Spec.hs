@@ -14,18 +14,18 @@ main = do
 
 parseTopLevel_testAssignIfExpr:: Test
 parseTopLevel_testAssignIfExpr = "" ~: do 
-    let a = parseToplevel "int a = 0; if( a; < 0.35) {a; }else{ a; }"
-    assertEqual "Parse if expr" "Right [( BinaryOp = ( Var a Int Nothing ) Int Just 0 ),If( ( BinaryOp < ( Var a Int Nothing ) Float Just 0.35 )){ ( Var a Int Nothing ) } else { ( Var a Int Nothing ) }]" (show a)
+    let a = parseToplevel "int a = 0; if( a < 0.35) {a; }else{ a; }"
+    assertEqual "Parse if expr: " "Right [( BinaryOp = ( Var a Int Nothing ) Int Just 0 ),If( ( BinaryOp < ( Var a Int Nothing ) Float Just 0.35 )){ ( Var a Int Nothing ) } else { ( Var a Int Nothing ) }]" (show a)
 
 parseTopLevel_testVarAssignExpr:: Test
 parseTopLevel_testVarAssignExpr = "" ~: do
         let a = parseToplevel "int a = 0;"
-        assertEqual "Parse varWithAssign" "Right [( BinaryOp = ( Var a Int Nothing ) Int Just 0 )]" (show a)
+        assertEqual "Parse varWithAssign: " "Right [( BinaryOp = ( Var a Int Nothing ) Int Just 0 )]" (show a)
 
 parseTopLevel_testVarExpr:: Test
 parseTopLevel_testVarExpr = "" ~: do
         let a = parseToplevel "int a;"
-        assertEqual "Parse varWithAssign" "Right [( Var a Int Nothing )]" (show a)
+        assertEqual "Parse var simple expr: " "Right [( Var a Int Nothing )]" (show a)
 
 parseTopLevel_testVarExprAssignLater_shouldFail:: Test
 parseTopLevel_testVarExprAssignLater_shouldFail = "Test with semicolon between var and assignment" ~: do
@@ -47,11 +47,19 @@ parseTopLevel_longFunctionArgs = "" ~: do
 
 parseTopLevel_sumFunction:: Test
 parseTopLevel_sumFunction = "" ~: do
-        let a = parseToplevel "fun(int a, int b) : int { int c; = a; + b; }"
+        let a = parseToplevel "fun(int a, int b) : int { int c = a + b; }"
         case a of
           Left pe -> do 
               assertFailure $ show pe 
-          Right exs -> assertEqual "" "" $ show exs 
+          Right exs -> assertEqual "" "[Function \"int\" fun [( Var a Int Nothing ),( Var b Int Nothing )] { [( BinaryOp = ( Var c Int Nothing ) ( BinaryOp + ( Var a Int Nothing ) ( Var b Int Nothing ) ) )] } ]" $ show exs 
+
+parseTopLevel_varDeclaration:: Test
+parseTopLevel_varDeclaration = "" ~: do
+        let a = parseToplevel "int a;"
+        case a of
+          Left pe -> do 
+              assertFailure $ show pe 
+          Right exs -> assertBool "Parse var declaration" True 
 
 parseTopLevelTests= TestList 
     [
@@ -61,6 +69,7 @@ parseTopLevelTests= TestList
     , parseTopLevel_testVarExprAssignLater_shouldFail
     , parseTopLevel_longFunctionArgs
     , parseTopLevel_sumFunction
+    , parseTopLevel_varDeclaration
     ]
 
 testImprovements = TestList 

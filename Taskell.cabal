@@ -28,7 +28,10 @@ library
       LLVMIR.Codegen
       LLVMIR.Emit
       Parsing.DataTypeParsingHelper
+      Parsing.IndividualExpressions.CallParser
+      Parsing.IndividualExpressions.VariableParser
       Parsing.Lexer
+      Parsing.OperatorTable
       Parsing.Parser
       Parsing.ParserStateHelpers
       Parsing.ParsingHelpers

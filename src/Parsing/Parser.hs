@@ -21,34 +21,8 @@ import Data.Maybe (isJust)
 import Data.Dynamic (Dynamic(Dynamic), toDyn)
 import Parsing.DataTypeParsingHelper (possibleAssignParser, fromDataExpressionToExpr)
 import Parsing.ParsingHelpers ((><))
-
-binary :: String -> Op -> Ex.Assoc -> Ex.Operator String ExprState Identity Expr
-binary s f assoc = Ex.Infix (reservedOp s >> return (BinaryOp f)) assoc
-
-unary :: String -> Op -> Ex.Operator String ExprState Identity Expr
-unary s f = Ex.Prefix (reservedOp s >> return (UnaryOp f))
-
-table :: [[Ex.Operator String ExprState Identity Expr]]
-table  = [
-          [
-            binary "*" (fromStringToOperator "*") Ex.AssocLeft,
-            binary "/" (fromStringToOperator "/") Ex.AssocLeft
-          ],
-          [
-            binary "+" (fromStringToOperator "+") Ex.AssocLeft,
-            binary "-" (fromStringToOperator "-") Ex.AssocLeft
-          ],
-          [
-            binary "==" (fromStringToOperator "==") Ex.AssocLeft,
-            binary "!=" (fromStringToOperator "!=") Ex.AssocLeft
-          ],
-          [
-            binary ">" (fromStringToOperator ">") Ex.AssocLeft,
-            binary "<" (fromStringToOperator "<") Ex.AssocLeft,
-            binary "<=" (fromStringToOperator "<=") Ex.AssocLeft,
-            binary ">=" (fromStringToOperator ">=") Ex.AssocLeft
-          ]
-        ]
+import Parsing.OperatorTable
+import Parsing.IndividualExpressions.VariableParser
 
 int :: CustomParsec Expr
 int = do
@@ -66,106 +40,10 @@ stringing = do
   n <- stringLiteral
   return $ String $ Just n
 
---TODO: Completely refactor parseVar
-{-
-  1.Var declaration
-  2.Var assignment
-    a. assign previously existing vars
-    b. function calls
-    c. functions (do it with pointers? Need to research this)
-  3.Var type parsing
-  4.Type checking
-  5.After assign operator -
-    a. parse correctly binary operators so it will chain
-    b. last statement should end with ';'
--}
-
-parseVar:: HasCallStack => CustomParsec Expr
-parseVar = do
-  let res = fmap reserved possibleDataTypesInString
-  let reservedDataTypes = foldr (<|>) (head res) (tail res)
-  varType <- lookAhead $ choice parsecPossibleVarTypes
-  reservedDataTypes
-  spaces
-  varName <- identifier
-  typeMap <- blockTypes <$> getState
-  -- Return bare variable
-  case Map.lookup varName typeMap of
-    Just nameFromMap -> do
-      unexpected $ "Variable " ++ varName ++ " has already type"
-    Nothing -> do
-      let returningExpr = Var (fromStringToDataType varType) varName
-      updateParserState (appendVariable returningExpr)
-      return returningExpr
-  where
-    parsecPossibleVarTypes = map string possibleDataTypesInString
-
---This is to avoid recursive calls
-parseBasicVar:: CustomParsec Expr
-parseBasicVar = do 
-  a <- parseVar
-  reservedOp ";"
-  return a
-
-parseBasicVarWithExistingType:: CustomParsec Expr
-parseBasicVarWithExistingType = do
-  a <- parseVarWithExistingType
-  reservedOp ";"
-  return a
-
-parseVarWithExistingType:: HasCallStack => CustomParsec Expr
-parseVarWithExistingType = do
-  varName <- identifier >< "parsing varname"
-  --if varName is datatype - then fail
-  (guard $ varName `notElem` possibleDataTypesInString) >< "Not passing guard"
-  typeMap <- blockTypes <$> getState
-  case Map.lookup varName typeMap of
-    Just nameFromMap -> do
-      return $ Var (fromStringToDataType nameFromMap) varName
-    Nothing -> do
-      unexpected $ "Non-existing variable " ++ "\"" ++ varName ++ "\"" ++ " should be assigned with type"
-
-parseAssign:: HasCallStack => Expr -> CustomParsec Expr
-parseAssign var@(Var t name) = do
-  spaces >< "parsing spaces"
-  reservedOp "=" >< "parsing =" 
-  spaces  
-  -- All possible values after assignment
-  val <- try assignExpr
-  --TODO: Guard types
-  let a = BinaryOp Assign var val
-  return a
-  where
-    assignExpr = Ex.buildExpressionParser table $ choice $ fromDataExpressionToExpr possibleAssignParser ++ [try call, try variable]
-
-parseAssign nonVar = trace "Can't assign value to non variable types " $ error $ show nonVar
-
-parseVarWithAssign:: HasCallStack => CustomParsec Expr
-parseVarWithAssign = do
-  a <- parseVar >>= parseAssign
-  reservedOp ";"
-  return a
-
-parseExistingVarWithAssign:: HasCallStack => CustomParsec Expr
-parseExistingVarWithAssign = do 
-  a <- (parseVarWithExistingType >>= parseAssign) >< "parsing var with existing type"
-  reservedOp ";"
-  return a
 
 --TODO: case where var; = 0 -> shouldn't be acceptable
-variable:: HasCallStack => CustomParsec Expr
-variable = do
-  a <- variable' 
-  return a
-  where 
-    variable' = do
-      spaces
-      try ( 
-        try parseExistingVarWithAssign >< "parse existing var with assign"
-        <|> try parseVarWithAssign >< "parse var with assign"
-        <|> try parseBasicVarWithExistingType >< "parse var with existing type"
-        <|> parseBasicVar >< "parse var"
-        )
+variable:: CustomParsec Expr
+variable = try (try emptyVarDeclaration <|> varWithAssignment) 
 
 expr :: CustomParsec Expr
 expr = Ex.buildExpressionParser (table ++ [return $ binary "=" (fromStringToOperator "=") Ex.AssocLeft]) factor
@@ -173,7 +51,7 @@ expr = Ex.buildExpressionParser (table ++ [return $ binary "=" (fromStringToOper
 function:: CustomParsec Expr
 function = do
   name <- identifier
-  args <- choice [parens $ (parseVar `sepBy` between spaces spaces (string ",")), parens $ (return Void `sepBy` spaces)] 
+  args <- choice [parens $ (varDeclaration `sepBy` between spaces spaces (string ",")), parens $ (return Void `sepBy` spaces)] 
   -- TODO:: Maybe use args as a string instead of whole Expr 
   -- Map is in form:: (varName, varType)
   updateParserState (\s@State{ stateUser = estate } -> s { stateUser = estate { blockTypes = Map.fromList (map (\a-> (getVarName a, getVarType a)) args)}})
@@ -189,15 +67,9 @@ extern :: CustomParsec Expr
 extern = do
   reserved "extern"
   name <- identifier
-  args <- parens $ many parseVar
+  args <- parens $ many varDeclaration 
   return $ Extern name args
 
-call :: CustomParsec Expr
-call = do
-  name <- identifier
-  args <- parens $ commaSep expr
-  reservedOp ";"
-  return $ Call name args
 
 ifexpr :: CustomParsec Expr
 ifexpr = do
