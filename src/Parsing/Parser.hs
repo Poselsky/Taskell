@@ -23,6 +23,7 @@ import Parsing.DataTypeParsingHelper (possibleAssignParser, fromDataExpressionTo
 import Parsing.ParsingHelpers ((><))
 import Parsing.OperatorTable
 import Parsing.IndividualExpressions.VariableParser
+import Text.Parsec.Expr
 
 int :: CustomParsec Expr
 int = do
@@ -41,12 +42,22 @@ stringing = do
   return $ String $ Just n
 
 
---TODO: case where var; = 0 -> shouldn't be acceptable
 variable:: CustomParsec Expr
-variable = try (try emptyVarDeclaration <|> varWithAssignment) 
+variable = do
+  --Parsing order is important
+  var <- (try varWithAssignment <|> varDeclaration )
+  return var
 
 expr :: CustomParsec Expr
-expr = Ex.buildExpressionParser (table ++ [return $ binary "=" (fromStringToOperator "=") Ex.AssocLeft]) factor
+expr = do
+  fac <- exprParserWithAssign factor 
+  return $ ExprList [fac]
+
+exprParserWithAssign:: CustomParsec Expr -> CustomParsec Expr
+exprParserWithAssign= Ex.buildExpressionParser (table ++ [return $ binary "=" (fromStringToOperator "=") Ex.AssocLeft]) 
+
+exprParser:: CustomParsec Expr -> CustomParsec Expr
+exprParser= Ex.buildExpressionParser table 
 
 function:: CustomParsec Expr
 function = do
@@ -59,45 +70,57 @@ function = do
   spaces `sepBy1` reservedOp ":"
   dataTypeInStr <- choice $ map string possibleDataTypesInString
   spaces
-  body <- braces $ many expr
+  body <- braces bodyExpr 
   -- return $ functionExpr bodyState name convertedArgs body
-  return $ Function dataTypeInStr name args body
+  return $ Function dataTypeInStr name (ExprList args) body
 
 extern :: CustomParsec Expr
 extern = do
   reserved "extern"
   name <- identifier
   args <- parens $ many varDeclaration 
-  return $ Extern name args
-
+  return $ Extern name (ExprList args)
 
 ifexpr :: CustomParsec Expr
 ifexpr = do
   reserved "if"
   spaces
-  boolExpr <- between (char '(') (char ')') expr
+  boolExpr <- between (char '(') (char ')') variableAfterAssignment
   spaces
-  tr <- braces expr
+  tr <- braces bodyExpr
   -- TODO: ELIF statement here
   reserved "else"
   spaces
-  fl <- braces expr
-  return $ If boolExpr tr fl
+  fl <- braces bodyExpr 
+  --If expression should return two lists of expressions
+  return $ If boolExpr tr fl 
 
-
+--TODO: Refactor this
 factor :: CustomParsec Expr
 factor = do
     try ifexpr
-      <|> try variable
-      <|> try (try function <|> call)
-      <|> try (try floating <|> int)
-      <|> parens expr
+    --var needs to end with ;, otherwise errors occur
+    <|> (do var <- try variable; reservedOp ";"; return var) 
+    <|> try (try function <|> (do callEx <- call; reservedOp ";"; return callEx))
+    <|> parens expr
+
+--TODO: we can add return expression 
+bodyExpr:: CustomParsec Expr
+bodyExpr = do
+  -- Parse body seperated by ';'
+  body <- many $ choice [
+    try $ do var <- exprParser variable <|> getExistingVar; reservedOp ";"; return var
+    , try $ do c <- exprParser call; reservedOp ";"; return c
+    , ifexpr
+    ] 
+
+  return $ ExprList body 
 
 defn :: CustomParsec Expr
 defn = do
   try extern
    <|> try function
-    <|> expr
+   <|> expr
 
 contents :: CustomParsec a -> CustomParsec a
 contents p = do
@@ -106,10 +129,10 @@ contents p = do
   eof
   return r
 
-toplevel :: CustomParsec [Expr]
-toplevel = many $ do
-    def <- defn
-    return def
+toplevel :: CustomParsec Expr
+toplevel = do
+  a <- many defn
+  return $ ExprList a
 
 -- parseExpr :: String -> Either ParseError Expr
 -- parseExpr s = do
@@ -119,7 +142,7 @@ toplevel = many $ do
 --   -- return evaluated
 
 
-parseToplevel :: String -> Either ParseError [Expr]
+parseToplevel :: String -> Either ParseError Expr
 parseToplevel s = do
   -- parsedExprs <- parse (contents toplevel) "<stdin>" s
   runParser (contents toplevel) emptyExprState "stdin" s

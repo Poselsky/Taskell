@@ -7,4 +7,4 @@ callParametrized varParser = do
   name <- identifier
   args <- parens $ commaSep varParser 
   reservedOp ";"
-  return $ Call name args
+  return $ Call name (ExprList args)

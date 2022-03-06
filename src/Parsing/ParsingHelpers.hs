@@ -1,5 +1,7 @@
 module Parsing.ParsingHelpers where
 import Debug.Trace (trace)
+import Parsing.Syntax (Expr (ExprList))
+import System.Environment (getArgs)
 
 --Debugging helper
 --TODO: This should get build args

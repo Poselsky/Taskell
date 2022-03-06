@@ -32,8 +32,9 @@ zero = cons $ C.Float (F.Double 0.0)
 false = zero
 true = one
 
-toSig :: [S.Expr] -> [(AST.Type, AST.Name)]
-toSig = map (\x -> (double, AST.Name $ fromString $ getVarName x))
+toSig :: S.Expr -> [(AST.Type, AST.Name)]
+toSig (S.ExprList s) = map (\x -> (double, AST.Name $ fromString $ getVarName x)) s
+toSig _ = error "Can't map non list signature"
 
 --Todo : I might need to generate another functions here
 codegenTop :: S.Expr -> LLVM ()
@@ -108,7 +109,7 @@ cgen' (S.Float (Just n)) = return $ cons $ C.Float (F.Double n)
 -- TODO: This should be generated from integer and not double, related to llvm type todo
 cgen' (S.Int (Just n)) = return $ cons $ C.Float (F.Double $ fromInteger n)
 cgen' (S.Int Nothing) = return $ cons $ C.Float (F.Double 0)
-cgen' (S.Call fn args) = do
+cgen' (S.Call fn (S.ExprList args)) = do
   largs <- mapM cgen args
   call (externf (AST.Name $ fromString fn)) largs
 cgen' (S.If cond tr fl) = do
@@ -141,7 +142,7 @@ cgen' (S.If cond tr fl) = do
   -- TODO: Here's potential of chaining if else
   return $ AST.value $ AST.Phi double [(trval, ifthen), (flval, ifelse)] []
   
-cgen' (S.Function t name args body) = do 
+cgen' (S.Function t name (S.ExprList args) (S.ExprList body)) = do 
   entry <- addBlock entryBlockName
   setBlock entry
   forM_ args $ \a -> do

@@ -10,6 +10,8 @@ import Parsing.OperatorTable
 import Parsing.IndividualExpressions.CallParser
     ( callParametrized )
 import Parsing.ParserStateHelpers
+import Debug.Trace (trace)
+import Parsing.ParsingHelpers ((><))
 
 
 --TODO: Completely refactor parseVar
@@ -55,7 +57,7 @@ varDeclaration = do
 -- num = 5;
 getExistingVar:: CustomParsec Expr
 getExistingVar = do
-  varName <- identifier  
+  varName <- lookAhead identifier  
 
   --Can't name vars by their datatypes
   guard $ varName `notElem` possibleDataTypesInString 
@@ -64,6 +66,9 @@ getExistingVar = do
   s <- getState
   let maybeVarType = getVariableTypeByName varName s 
 
+  -- Just to consume token
+  _ <- identifier >< varName
+
   case maybeVarType of 
     Nothing -> fail ("VarName: " ++ varName ++ " wasn't previously declared.")
     Just str -> return $ Var (fromStringToDataType str) varName
@@ -71,16 +76,20 @@ getExistingVar = do
 emptyVarDeclaration:: CustomParsec Expr
 emptyVarDeclaration = do
   declaredVar <- varDeclaration 
-  reservedOp ";"
   return declaredVar 
 
+--variableAfterAssignment is what can be assigned to variable
+--Here we could also assign function pointers
 variableAfterAssignment:: CustomParsec Expr
 variableAfterAssignment = do
-  let possibleAssignments = [getExistingVar, call 
-    --This is pretty neat, it will convert to correct var automatically
+  let possibleAssignments = [
+       getExistingVar
+       , call 
+       -- This is pretty neat, it will convert to correct var automatically
        , toDataTypeExpr <$> stringLiteral
        , toDataTypeExpr <$> integer
-       , toDataTypeExpr <$> float]
+       , toDataTypeExpr <$> float
+       ]
   buildExpressionParser table $ choice possibleAssignments 
 
 varWithAssignment:: CustomParsec Expr
@@ -94,7 +103,6 @@ varWithAssignment = do
   -- Everything else after assignment
   -- Name tree because ((Var int a + (Var int b + Var int c)) - Var int d)
   treeRight <- variableAfterAssignment
-  reservedOp ";"
   return $ BinaryOp Assign varLeft treeRight 
 
 call:: CustomParsec Expr

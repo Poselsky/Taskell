@@ -21,10 +21,11 @@ process modo source = do
   let res = parseToplevel source
   case res of
     Left err -> print err >> return Nothing
-    Right ex -> do
+    Right (ExprList ex)-> do
       print res
       ast <- codegen modo ex
       return $ Just ast
+    Right _ -> error "Not possible"
 
 processFile :: String -> IO (Maybe AST.Module)
 processFile fname = readFile fname >>= process initModule

@@ -23,6 +23,7 @@ instance Show Expr where
     show (If boolExpr ifTrue ifFalse) = "If( " ++ show boolExpr ++  "){ " ++ show ifTrue ++ " } else " ++ "{ "++ show ifFalse++" }"
     show (BinaryOp op expr1 expr2) = "( BinaryOp " ++ show op ++ " " ++ show expr1 ++ " " ++ show expr2 ++ " )"
     show (UnaryOp op expr) = "( UnaryOp " ++ show op ++ " " ++ show expr ++ " )"
+    show (ExprList expr) = "[ " ++ foldr (\x acc -> show x ++ acc ) "" expr ++ " ]"
     show (Float a) = "Float " ++ show a
     show (Int a) = "Int " ++ show a
     show (I64 a) = "I64 " ++ show a 
@@ -34,17 +35,19 @@ instance Show Expr where
     show (String a) = "String " ++ show a 
     show Void = "Void "
 
-type FunctionBody = [Expr]
+type FunctionBody = Expr
+type ExprList = Expr
 
 data Expr
     -- Var should refer to Data type and name
     = Var Expr Name 
-    | Call Name [Expr] 
-    | Extern Name [Expr] 
-    | Function String Name [Expr] FunctionBody
+    | Call Name ExprList 
+    | Extern Name ExprList
+    | Function String Name ExprList FunctionBody
     | BinaryOp Op Expr Expr
     | UnaryOp Op Expr 
     | If Expr Expr Expr
+    | ExprList [Expr]
     -- Data types
     | Float (Maybe Double)
     | Int (Maybe Integer)
