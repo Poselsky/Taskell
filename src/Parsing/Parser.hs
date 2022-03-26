@@ -72,7 +72,7 @@ function = do
   spaces
   body <- braces bodyExpr 
   -- return $ functionExpr bodyState name convertedArgs body
-  return $ Function dataTypeInStr name (ExprList args) body
+  return $ Function (fromStringToDataType dataTypeInStr) name (ExprList args) body
 
 extern :: CustomParsec Expr
 extern = do

@@ -18,7 +18,7 @@ type IInt = I.Int64
 instance Show Expr where
     show var@(Var t name) = "( Var " ++ name ++ " " ++ show t ++ " )"
     show (Call name args) = "Call " ++ show name ++ " " ++ show args 
-    show (Function t n args body) = "Function " ++ show t ++ " " ++ n ++ " " ++ show args ++ " { " ++ show body ++ " } "
+    show (Function t n args body) = "Function " ++ dataTypeToString t ++ " " ++ n ++ " " ++ show args ++ " { " ++ show body ++ " } "
     show (Extern n na) = "Extern " ++ n ++ " " ++ show na 
     show (If boolExpr ifTrue ifFalse) = "If( " ++ show boolExpr ++  "){ " ++ show ifTrue ++ " } else " ++ "{ "++ show ifFalse++" }"
     show (BinaryOp op expr1 expr2) = "( BinaryOp " ++ show op ++ " " ++ show expr1 ++ " " ++ show expr2 ++ " )"
@@ -43,7 +43,7 @@ data Expr
     = Var Expr Name 
     | Call Name ExprList 
     | Extern Name ExprList
-    | Function String Name ExprList FunctionBody
+    | Function Expr Name ExprList FunctionBody
     | BinaryOp Op Expr Expr
     | UnaryOp Op Expr 
     | If Expr Expr Expr

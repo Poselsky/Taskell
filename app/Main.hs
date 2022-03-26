@@ -46,7 +46,7 @@ repl = runInputT defaultSettings (loop initModule)
 runBasicCase:: IO ()
 runBasicCase = do
   -- b <- process initModule "add(int a,int b,int c) : string { a > b };"
-  a <- process initModule "int a = 0; a; = 0"
+  a <- process initModule "main() : int {int a = 0; a = 2;}"
   -- a <- process initModule "int c; c = 2;"
   return ()
 
